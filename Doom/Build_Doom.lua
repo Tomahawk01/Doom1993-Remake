@@ -17,7 +17,8 @@ project "Doom"
     includedirs
     {
         "src",
-        "%{wks.location}/vendor/glfw/include"
+        "%{wks.location}/vendor/glfw/include",
+        "%{wks.location}/vendor/glad/src/include"
     }
 
     libdirs
@@ -27,6 +28,7 @@ project "Doom"
 
     links
     {
+        "Glad",
         "glfw3.lib"
     }
 

@@ -15,4 +15,8 @@ workspace "Doom-Remake"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
+group "Dependencies"
+    include "vendor/glad/Build-Glad.lua"
+group ""
+
 include "Doom/Build_Doom.lua"
