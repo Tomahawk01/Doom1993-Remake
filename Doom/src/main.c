@@ -1,3 +1,4 @@
+#include "renderer.h"
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
 
@@ -28,9 +29,21 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
+	renderer_init(WIDTH, HEIGHT);
+
+	char title[128];
+	float last = 0.0f;
 	while (!glfwWindowShouldClose(window))
 	{
+		float now = glfwGetTime();
+		float delta = now - last;
+		last = now;
+
+		snprintf(title, 128, "Doom1993-Remake | %.0f fps", 1.0f / delta);
+		glfwSetWindowTitle(window, title);
+
 		glfwPollEvents();
+		renderer_clear();
 		glfwSwapBuffers(window);
 	}
 
