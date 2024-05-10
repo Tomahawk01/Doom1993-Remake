@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include "wad_loader.h"
+#include "utils.h"
 
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
@@ -52,8 +53,8 @@ int main(int argc, char** argv)
 	for (size_t i = 0; i < map.num_vertices; i++)
 	{
 		remapped_vertices[i] = (vec2){
-			.x = (__max(map.min.x, __min(map.vertices[i].x, map.max.x)) - map.min.x) * (out_max.x - out_min.x) / (map.max.x - map.min.x) + out_min.x,
-			.y = HEIGHT - (__max(map.min.y, __min(map.vertices[i].y, map.max.y)) - map.min.y) * (out_max.y - out_min.y) / (map.max.y - map.min.y) - out_min.y
+			.x = (max(map.min.x, min(map.vertices[i].x, map.max.x)) - map.min.x) * (out_max.x - out_min.x) / (map.max.x - map.min.x) + out_min.x,
+			.y = HEIGHT - (max(map.min.y, min(map.vertices[i].y, map.max.y)) - map.min.y) * (out_max.y - out_min.y) / (map.max.y - map.min.y) - out_min.y
 		};
 	}
 
