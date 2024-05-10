@@ -77,8 +77,18 @@ int main(int argc, char** argv)
 
 		renderer_clear();
 
+		for (size_t i = 0; i < map.num_linedefs; i++)
+		{
+			linedef* ld = &map.linedefs[i];
+			vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+			if (ld->flags & LINEDEF_FLAGS_TWO_SIDED)
+				color = (vec4){ 0.3f, 0.3f, 0.3f, 1.0f };
+
+			renderer_draw_line(remapped_vertices[ld->start_index], remapped_vertices[ld->end_index], 1.0f, color);
+		}
+
 		for (size_t i = 0; i < map.num_vertices; i++)
-			renderer_draw_point(remapped_vertices[i], 3.0f, (vec4) { 1.0f, 1.0f, 1.0f, 1.0f });
+			renderer_draw_point(remapped_vertices[i], 3.0f, (vec4) { 0.0f, 1.0f, 0.0f, 1.0f });
 
 		glfwSwapBuffers(window);
 	}
