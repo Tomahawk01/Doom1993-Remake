@@ -1,5 +1,5 @@
 #pragma once
-#include <math/vector.h>
+#include "math/vector.h"
 
 void renderer_init(int width, int height);
 void renderer_clear();

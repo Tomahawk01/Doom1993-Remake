@@ -5,6 +5,7 @@
 #include "GLFW/glfw3.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #define WIDTH 1280
 #define HEIGHT 720
@@ -37,12 +38,23 @@ int main(int argc, char** argv)
 		printf("Failed to load WAD file\n");
 		return -1;
 	}
-	printf("Loaded a WAD file of type %s with %u lumps and directory at %u\n", wad.id, wad.num_lumps, wad.directory_offset);
 
-	printf("Lumps:\n");
-	for (int i = 0; i < wad.num_lumps; i++)
+	map map;
+	if (wad_read_map("E1M1", &map, &wad) != 0)
 	{
-		printf("%8s:\t%u\t%u\n", wad.lumps[i].name, wad.lumps[i].offset, wad.lumps[i].size);
+		printf("Failed to read map 'E1M1' from WAD file\n");
+		return -1;
+	}
+
+	vec2 out_min = { 20.0f, 20.0f };
+	vec2 out_max = { WIDTH - 20.0f, HEIGHT - 20.0f };
+	vec2* remapped_vertices = malloc(sizeof(vec2) * map.num_vertices);
+	for (size_t i = 0; i < map.num_vertices; i++)
+	{
+		remapped_vertices[i] = (vec2){
+			.x = (__max(map.min.x, __min(map.vertices[i].x, map.max.x)) - map.min.x) * (out_max.x - out_min.x) / (map.max.x - map.min.x) + out_min.x,
+			.y = HEIGHT - (__max(map.min.y, __min(map.vertices[i].y, map.max.y)) - map.min.y) * (out_max.y - out_min.y) / (map.max.y - map.min.y) - out_min.y
+		};
 	}
 
 	renderer_init(WIDTH, HEIGHT);
@@ -63,13 +75,10 @@ int main(int argc, char** argv)
 		glfwSetWindowTitle(window, title);
 
 		renderer_clear();
-		// FOR TESTING
-		{
-			renderer_draw_point((vec2) { WIDTH / 2.0f, HEIGHT / 2.0f }, 5.0f, (vec4) { 1.0f, 1.0f, 1.0f, 1.0f });
-			renderer_draw_line((vec2) { 800.0f, 200.0f }, (vec2) { WIDTH - 300.0f, HEIGHT - 300.0f }, 4.0f, (vec4) { 0.0f, 1.0f, 0.0f, 1.0f });
-			renderer_draw_line((vec2) { 1000.0f, 200.0f }, (vec2) { WIDTH - 500.0f, HEIGHT - 300.0f }, 4.0f, (vec4) { 0.0f, 1.0f, 0.0f, 1.0f });
-			renderer_draw_quad((vec2) { 100.0f, 100.0f }, (vec2) { 50.0f, 50.0f }, angle, (vec4) { 0.5f, 0.5f, 1.0f, 1.0f });
-		}
+
+		for (size_t i = 0; i < map.num_vertices; i++)
+			renderer_draw_point(remapped_vertices[i], 3.0f, (vec4) { 1.0f, 1.0f, 1.0f, 1.0f });
+
 		glfwSwapBuffers(window);
 	}
 
