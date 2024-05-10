@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "wad_loader.h"
 
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
@@ -12,7 +13,7 @@ int main(int argc, char** argv)
 {
 	if (glfwInit() != GLFW_TRUE)
 	{
-		printf(stderr, "Failed to initialize GLFW\n");
+		fprintf(stderr, "Failed to initialize GLFW\n");
 		return -1;
 	}
 
@@ -26,8 +27,22 @@ int main(int argc, char** argv)
 
 	if (!gladLoadGLLoader(glfwGetProcAddress))
 	{
-		printf(stderr, "Failed to initialize Glad\n");
+		fprintf(stderr, "Failed to initialize Glad\n");
 		return -1;
+	}
+
+	wad wad;
+	if (wad_load_from_file("res/doom.wad", &wad) != 0)
+	{
+		printf("Failed to load WAD file\n");
+		return -1;
+	}
+	printf("Loaded a WAD file of type %s with %u lumps and directory at %u\n", wad.id, wad.num_lumps, wad.directory_offset);
+
+	printf("Lumps:\n");
+	for (int i = 0; i < wad.num_lumps; i++)
+	{
+		printf("%8s:\t%u\t%u\n", wad.lumps[i].name, wad.lumps[i].offset, wad.lumps[i].size);
 	}
 
 	renderer_init(WIDTH, HEIGHT);
