@@ -84,8 +84,8 @@ mat4 mat4_rotate(vec3 axis, float angle)
 mat4 mat4_look_at(vec3 eye, vec3 target, vec3 up)
 {
 	vec3 forward = vec3_normalize(vec3_sub(target, eye));
-	vec3 right = vec3_normalize(vec3_cross(up, forward));
-	vec3 new_up = vec3_cross(forward, right);
+	vec3 right = vec3_normalize(vec3_cross(forward, up));
+	vec3 new_up = vec3_cross(right, forward);
 
 	mat4 result = {
 		.a1 = right.x,

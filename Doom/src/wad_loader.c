@@ -88,12 +88,14 @@ int wad_find_lump(const char* lumpname, const wad* wad)
 #define SIDEDEFS_IDX 3
 #define VERTEXES_IDX 4
 #define SEGS_IDX 5
-#define SSECTORS 6
-#define NODES 7
-#define SECTORS 8
+#define SSECTORS_IDX 6
+#define NODES_IDX 7
+#define SECTORS_IDX 8
 
 static void read_vertices(map* map, const lump* lump);
 static void read_linedefs(map* map, const lump* lump);
+static void read_sidedefs(map* map, const lump* lump);
+static void read_sectors(map* map, const lump* lump);
 
 int wad_read_map(const char* mapname, map* map, const wad* wad)
 {
@@ -103,6 +105,8 @@ int wad_read_map(const char* mapname, map* map, const wad* wad)
 
 	read_vertices(map, &wad->lumps[map_index + VERTEXES_IDX]);
 	read_linedefs(map, &wad->lumps[map_index + LINEDEFS_IDX]);
+	read_sidedefs(map, &wad->lumps[map_index + SIDEDEFS_IDX]);
+	read_sectors(map, &wad->lumps[map_index + SECTORS_IDX]);
 
 	return 0;
 }
@@ -141,5 +145,28 @@ void read_linedefs(map* map, const lump* lump)
 		map->linedefs[j].start_index = READ_I16(lump->data, i);
 		map->linedefs[j].end_index = READ_I16(lump->data, i + 2);
 		map->linedefs[j].flags = READ_I16(lump->data, i + 4);
+		map->linedefs[j].front_sidedef = READ_I16(lump->data, i + 10);
+		map->linedefs[j].back_sidedef = READ_I16(lump->data, i + 12);
+	}
+}
+
+void read_sidedefs(map* map, const lump* lump)
+{
+	map->num_sidedefs = lump->size / 30;  // Each sidedef is 30 bytes
+	map->sidedefs = malloc(sizeof(sidedef) * map->num_sidedefs);
+
+	for (int i = 0, j = 0; i < lump->size; i += 30, j++)
+		map->sidedefs[j].sector_index = READ_I16(lump->data, i + 28);
+}
+
+void read_sectors(map* map, const lump* lump)
+{
+	map->num_sectors = lump->size / 26;  // Each sector is 26 bytes
+	map->sectors = malloc(sizeof(sector) * map->num_sectors);
+
+	for (int i = 0, j = 0; i < lump->size; i += 26, j++)
+	{
+		map->sectors[j].floor = (int16_t)READ_I16(lump->data, i);
+		map->sectors[j].ceiling = (int16_t)READ_I16(lump->data, i + 2);
 	}
 }

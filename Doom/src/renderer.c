@@ -41,6 +41,7 @@ void renderer_init(int w, int h)
 	height = h;
 
 	glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
+	glEnable(GL_DEPTH_TEST);
 
 	init_quad();
 	init_shader();
@@ -49,7 +50,7 @@ void renderer_init(int w, int h)
 
 void renderer_clear()
 {
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
 void renderer_set_projection(mat4 projection)
