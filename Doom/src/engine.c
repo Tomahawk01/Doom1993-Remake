@@ -1,14 +1,19 @@
 #include "engine.h"
 #include "renderer.h"
 #include "camera.h"
+#include "input.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define FOV (M_PI / 2.0f)	// 90 degrees
+#define PLAYER_SPEED (5.0f)
+#define MOUSE_SENSITIVITY (0.002f) // in radians
 
 static camera cam;
+static vec2 last_mouse_pos;
 static mesh quad_mesh;
 
 void engine_init(wad* wad, const char* mapname)
@@ -48,6 +53,40 @@ void engine_init(wad* wad, const char* mapname)
 void engine_update(float dt)
 {
 	camera_update_direction_vertors(&cam);
+
+	float speed = (is_button_pressed(KEY_LSHIFT) ? PLAYER_SPEED * 1.7f : PLAYER_SPEED) * dt;
+
+	if (is_button_pressed(KEY_W))
+		cam.position = vec3_add(cam.position, vec3_scale(cam.forward, speed));
+	if (is_button_pressed(KEY_S))
+		cam.position = vec3_add(cam.position, vec3_scale(cam.forward, -speed));
+	if (is_button_pressed(KEY_A))
+		cam.position = vec3_add(cam.position, vec3_scale(cam.right, speed));
+	if (is_button_pressed(KEY_D))
+		cam.position = vec3_add(cam.position, vec3_scale(cam.right, -speed));
+
+	if (is_button_pressed(MOUSE_RIGHT))
+	{
+		if (!is_mouse_captured())
+		{
+			last_mouse_pos = get_mouse_position();
+			set_mouse_captured(1);
+		}
+
+		vec2 curr_mouse_pos = get_mouse_position();
+		float dx = last_mouse_pos.x - curr_mouse_pos.x;
+		float dy = last_mouse_pos.y - curr_mouse_pos.y;
+		last_mouse_pos = curr_mouse_pos;
+
+		cam.yaw += dx * MOUSE_SENSITIVITY;
+		cam.pitch += dy * MOUSE_SENSITIVITY;
+		// Clamp the camera vertically
+		cam.pitch = max(-M_PI_2 + 0.05, min(M_PI_2 - 0.05, cam.pitch));
+	}
+	else if (is_mouse_captured())
+	{
+		set_mouse_captured(0);
+	}
 }
 
 void engine_render()

@@ -1,6 +1,7 @@
 project "Doom"
     kind "ConsoleApp"
     language "C"
+    cdialect "C17"
     staticruntime "off"
 
     files

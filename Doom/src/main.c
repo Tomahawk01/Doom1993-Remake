@@ -1,7 +1,7 @@
 #include "engine.h"
 #include "renderer.h"
 #include "wad_loader.h"
-#include "utils.h"
+#include "input.h"
 
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
@@ -28,11 +28,20 @@ int main(int argc, char** argv)
 	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Doom1993-Remake", NULL, NULL);
 	glfwMakeContextCurrent(window);
 
+	// V-Sync
+	glfwSwapInterval(0);
+
 	if (!gladLoadGLLoader(glfwGetProcAddress))
 	{
 		fprintf(stderr, "Failed to initialize Glad\n");
 		return -1;
 	}
+
+	// Input handling
+	input_init(window);
+	glfwSetKeyCallback(window, input_key_callback);
+	glfwSetMouseButtonCallback(window, input_mouse_button_callback);
+	glfwSetCursorPosCallback(window, input_mouse_position_callback);
 
 	wad wad;
 	if (wad_load_from_file("res/doom.wad", &wad) != 0)
