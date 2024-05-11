@@ -32,7 +32,8 @@ const char* fragSrc =
 static mesh quad_mesh;
 static float width, height;
 static GLuint program;
-static GLuint model_location, view_location, color_location;
+static GLuint model_location, view_location, projection_location;
+static GLuint color_location;
 
 void renderer_init(int w, int h)
 {
@@ -51,9 +52,19 @@ void renderer_clear()
 	glClear(GL_COLOR_BUFFER_BIT);
 }
 
+void renderer_set_projection(mat4 projection)
+{
+	glUniformMatrix4fv(projection_location, 1, GL_FALSE, projection.v);
+}
+
 void renderer_set_view(mat4 view)
 {
 	glUniformMatrix4fv(view_location, 1, GL_FALSE, view.v);
+}
+
+vec2 renderer_get_size()
+{
+	return (vec2) { width, height };
 }
 
 void renderer_draw_mesh(const mesh* mesh, mat4 transformation, vec4 color)
@@ -110,6 +121,7 @@ static void init_shader()
 
 	model_location = glGetUniformLocation(program, "u_model");
 	view_location = glGetUniformLocation(program, "u_view");
+	projection_location = glGetUniformLocation(program, "u_projection");
 	color_location = glGetUniformLocation(program, "u_color");
 }
 

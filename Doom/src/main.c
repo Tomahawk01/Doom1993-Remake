@@ -1,3 +1,4 @@
+#include "engine.h"
 #include "renderer.h"
 #include "wad_loader.h"
 #include "utils.h"
@@ -40,28 +41,10 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	map map;
-	if (wad_read_map("E1M1", &map, &wad) != 0)
-	{
-		printf("Failed to read map 'E1M1' from WAD file\n");
-		return -1;
-	}
-
-	vec2 out_min = { 20.0f, 20.0f };
-	vec2 out_max = { WIDTH - 20.0f, HEIGHT - 20.0f };
-	vec2* remapped_vertices = malloc(sizeof(vec2) * map.num_vertices);
-	for (size_t i = 0; i < map.num_vertices; i++)
-	{
-		remapped_vertices[i] = (vec2){
-			.x = (max(map.min.x, min(map.vertices[i].x, map.max.x)) - map.min.x) * (out_max.x - out_min.x) / (map.max.x - map.min.x) + out_min.x,
-			.y = HEIGHT - (max(map.min.y, min(map.vertices[i].y, map.max.y)) - map.min.y) * (out_max.y - out_min.y) / (map.max.y - map.min.y) - out_min.y
-		};
-	}
-
 	renderer_init(WIDTH, HEIGHT);
+	engine_init(&wad, "E1M1");
 
 	char title[128];
-	float angle = 0.0f;
 	float last = 0.0f;
 	while (!glfwWindowShouldClose(window))
 	{
@@ -69,27 +52,14 @@ int main(int argc, char** argv)
 		float delta = now - last;
 		last = now;
 
-		angle += 1.0f * delta;
+		engine_update(delta);
 
 		glfwPollEvents();
 		snprintf(title, 128, "Doom1993-Remake | %.0f fps", 1.0f / delta);
 		glfwSetWindowTitle(window, title);
 
 		renderer_clear();
-
-		for (size_t i = 0; i < map.num_linedefs; i++)
-		{
-			linedef* ld = &map.linedefs[i];
-			vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
-			if (ld->flags & LINEDEF_FLAGS_TWO_SIDED)
-				color = (vec4){ 0.3f, 0.3f, 0.3f, 1.0f };
-
-			renderer_draw_line(remapped_vertices[ld->start_index], remapped_vertices[ld->end_index], 1.0f, color);
-		}
-
-		for (size_t i = 0; i < map.num_vertices; i++)
-			renderer_draw_point(remapped_vertices[i], 3.0f, (vec4) { 0.0f, 1.0f, 0.0f, 1.0f });
-
+		engine_render();
 		glfwSwapBuffers(window);
 	}
 
