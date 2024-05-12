@@ -2,6 +2,7 @@
 #include "map.h"
 #include "gl_map.h"
 #include "palette.h"
+#include "flat_texture.h"
 
 #include <stdint.h>
 
@@ -24,6 +25,8 @@ int wad_load_from_file(const char* filename, wad* wad);
 void wad_free(wad* wad);
 
 int wad_find_lump(const char* lumpname, const wad* wad);
-int wad_read_playpal(palette* pal, const wad* wad);
 int wad_read_map(const char* mapname, map* map, const wad* wad);
 int wad_read_gl_map(const char* gl_mapname, gl_map* map, const wad* wad);
+
+int wad_read_playpal(palette* pal, const wad* wad);
+flat_tex* wad_read_flats(size_t* num, const wad* wad);

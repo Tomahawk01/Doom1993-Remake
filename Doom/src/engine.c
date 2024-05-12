@@ -37,6 +37,8 @@ static void generate_meshes(const map* map, const gl_map* gl_map);
 static mat4 model_from_vertices(vec3 p0, vec3 p1, vec3 p2, vec3 p3);
 
 static palette pal;
+static size_t num_flats;
+static GLuint* flat_textures;
 
 static camera cam;
 static vec2 last_mouse_pos;
@@ -97,6 +99,13 @@ void engine_init(wad* wad, const char* mapname)
 	wad_read_playpal(&pal, wad);
 	GLuint palette_texture = palette_generate_texture(&pal);
 	renderer_set_palette_texture(palette_texture);
+
+	flat_tex* flats = wad_read_flats(&num_flats, wad);
+	flat_textures = malloc(sizeof(GLuint) * num_flats);
+	for (int i = 0; i < num_flats; i++)
+		flat_textures[i] = generate_flat_texture(&flats[i]);
+
+	free(flats);
 }
 
 void engine_update(float dt)
@@ -143,6 +152,7 @@ void engine_render()
 	mat4 view = mat4_look_at(cam.position, vec3_add(cam.position, cam.forward), cam.up);
 	renderer_set_view(view);
 
+	renderer_set_draw_texture(0);
 	for (wall_node* node = w_list; node != NULL; node = node->next)
 	{
 		srand((uintptr_t)node->sector);
@@ -152,13 +162,15 @@ void engine_render()
 
 	for (flat_node* node = f_list; node != NULL; node = node->next)
 	{
-		srand((uintptr_t)node->sector);
-		int color = rand() % NUM_COLORS;
+		int floor_tex = node->sector->floor_tex < 0 || node->sector->floor_tex >= num_flats ? 0 : flat_textures[node->sector->floor_tex];
+		int ceiling_tex = node->sector->ceiling_tex < 0 || node->sector->ceiling_tex >= num_flats ? 0 : flat_textures[node->sector->ceiling_tex];
 
 		// Floor rendering
-		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->floor / SCALE, 0.0f }), color);
+		renderer_set_draw_texture(floor_tex);
+		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->floor / SCALE, 0.0f }), 0);
 		// Ceiling rendering
-		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->ceiling / SCALE, 0.0f }), color);
+		renderer_set_draw_texture(ceiling_tex);
+		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->ceiling / SCALE, 0.0f }), 0);
 	}
 }
 
@@ -199,7 +211,8 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 				v = map->vertices[segment->start_vertex];
 
 			vertices[j] = (vertex){
-				.position = {v.x / SCALE, 0.0f, -v.y / SCALE}
+				.position = {v.x / SCALE, 0.0f, -v.y / SCALE},
+				.tex_coords = {v.x / FLAT_TEXTURE_SIZE, -v.y / FLAT_TEXTURE_SIZE}
 			};
 		}
 
