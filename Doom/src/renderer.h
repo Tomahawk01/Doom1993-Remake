@@ -8,6 +8,7 @@ void renderer_clear();
 
 void renderer_set_palette_texture(GLuint palette_texture);
 void renderer_set_draw_texture(GLuint texture);
+void renderer_set_texture_index(int index);
 void renderer_set_projection(mat4 projection);
 void renderer_set_view(mat4 view);
 

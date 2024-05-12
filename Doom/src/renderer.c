@@ -29,12 +29,13 @@ const char* fragSrc =
 	"in vec2 TexCoords;\n"
 	"out vec4 fragColor;\n"
 	"uniform bool u_useTexture;\n"
-	"uniform usampler2D u_tex;\n"
+	"uniform usampler2DArray u_tex;\n"
+	"uniform int u_texIndex;\n"
 	"uniform sampler1D u_pallete;\n"
 	"uniform int u_color;\n"
 	"void main() {\n"
 	"  if (u_useTexture) {\n"
-	"    fragColor = texelFetch(u_pallete, int(texture(u_tex, TexCoords).r), 0);\n"
+	"    fragColor = texelFetch(u_pallete, int(texture(u_tex, vec3(TexCoords, u_texIndex)).r), 0);\n"
 	"  } else {\n"
 	"    fragColor = texelFetch(u_pallete, u_color, 0);\n"
 	"  }\n"
@@ -44,7 +45,7 @@ static mesh quad_mesh;
 static float width, height;
 static GLuint program;
 static GLuint model_location, view_location, projection_location;
-static GLuint color_location, use_texture_location;
+static GLuint color_location, use_texture_location, texture_index_location;
 
 void renderer_init(int w, int h)
 {
@@ -80,8 +81,13 @@ void renderer_set_draw_texture(GLuint texture)
 	{
 		glUniform1i(use_texture_location, 1);
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, texture);
+		glBindTexture(GL_TEXTURE_2D_ARRAY, texture);
 	}
+}
+
+void renderer_set_texture_index(int index)
+{
+	glUniform1i(texture_index_location, index);
 }
 
 void renderer_set_projection(mat4 projection)
@@ -156,6 +162,7 @@ static void init_shader()
 	projection_location = glGetUniformLocation(program, "u_projection");
 	color_location = glGetUniformLocation(program, "u_color");
 	use_texture_location = glGetUniformLocation(program, "u_useTexture");
+	texture_index_location = glGetUniformLocation(program, "u_texIndex");
 
 	GLuint palette_location = glGetUniformLocation(program, "u_palette");
 	glUniform1i(palette_location, 0);
