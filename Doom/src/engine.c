@@ -3,6 +3,7 @@
 #include "camera.h"
 #include "input.h"
 #include "map.h"
+#include "palette.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -33,9 +34,9 @@ typedef struct flat_node
 } flat_node, flat_list;
 
 static void generate_meshes(const map* map, const gl_map* gl_map);
-
-static vec3 get_random_color(const void* seed);
 static mat4 model_from_vertices(vec3 p0, vec3 p1, vec3 p2, vec3 p3);
+
+static palette pal;
 
 static camera cam;
 static vec2 last_mouse_pos;
@@ -92,6 +93,10 @@ void engine_init(wad* wad, const char* mapname)
 	}
 
 	generate_meshes(&map, &gl_map);
+
+	wad_read_playpal(&pal, wad);
+	GLuint palette_texture = palette_generate_texture(&pal);
+	renderer_set_palette_texture(palette_texture);
 }
 
 void engine_update(float dt)
@@ -140,17 +145,20 @@ void engine_render()
 
 	for (wall_node* node = w_list; node != NULL; node = node->next)
 	{
-		vec3 color = vec3_scale(get_random_color(node->sector), node->sector->light_level / 255.0f);
-		renderer_draw_mesh(&quad_mesh, node->model, (vec4) { color.x, color.y, color.z, 1.0f });
+		srand((uintptr_t)node->sector);
+		int color = rand() % NUM_COLORS;
+		renderer_draw_mesh(&quad_mesh, node->model, color);
 	}
 
 	for (flat_node* node = f_list; node != NULL; node = node->next)
 	{
-		vec3 color = vec3_scale(get_random_color(node->sector), node->sector->light_level / 255.0f * 0.8f);
+		srand((uintptr_t)node->sector);
+		int color = rand() % NUM_COLORS;
+
 		// Floor rendering
-		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->floor / SCALE, 0.0f }), (vec4) { color.x, color.y, color.z, 1.0f });
+		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->floor / SCALE, 0.0f }), color);
 		// Ceiling rendering
-		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->ceiling / SCALE, 0.0f }), (vec4) { color.x, color.y, color.z, 1.0f });
+		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->ceiling / SCALE, 0.0f }), color);
 	}
 }
 
@@ -279,16 +287,6 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 			wall_node_ptr = &node->next;
 		}
 	}
-}
-
-vec3 get_random_color(const void* seed)
-{
-	srand((uintptr_t)seed);
-	return vec3_normalize((vec3){
-		(float)rand() / RAND_MAX,
-		(float)rand() / RAND_MAX,
-		(float)rand() / RAND_MAX
-	});
 }
 
 mat4 model_from_vertices(vec3 p0, vec3 p1, vec3 p2, vec3 p3)

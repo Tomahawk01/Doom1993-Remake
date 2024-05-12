@@ -24,9 +24,10 @@ const char* vertSrc =
 const char* fragSrc =
 	"#version 330 core\n"
 	"out vec4 fragColor;\n"
-	"uniform vec4 u_color;\n"
+	"uniform sampler1D u_pallete;\n"
+	"uniform int u_color;\n"
 	"void main() {\n"
-	"  fragColor = u_color;\n"
+	"  fragColor = texelFetch(u_pallete, u_color, 0);\n"
 	"}\n";
 
 static mesh quad_mesh;
@@ -53,6 +54,12 @@ void renderer_clear()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
+void renderer_set_palette_texture(GLuint palette_texture)
+{
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_1D, palette_texture);
+}
+
 void renderer_set_projection(mat4 projection)
 {
 	glUniformMatrix4fv(projection_location, 1, GL_FALSE, projection.v);
@@ -68,9 +75,9 @@ vec2 renderer_get_size()
 	return (vec2) { width, height };
 }
 
-void renderer_draw_mesh(const mesh* mesh, mat4 transformation, vec4 color)
+void renderer_draw_mesh(const mesh* mesh, mat4 transformation, int color)
 {
-	glUniform4fv(color_location, 1, color.v);
+	glUniform1i(color_location, color);
 	glUniformMatrix4fv(model_location, 1, GL_FALSE, transformation.v);
 
 	glBindVertexArray(mesh->vao);
@@ -78,7 +85,7 @@ void renderer_draw_mesh(const mesh* mesh, mat4 transformation, vec4 color)
 	glDrawElements(GL_TRIANGLES, mesh->num_indices, GL_UNSIGNED_INT, NULL);
 }
 
-void renderer_draw_point(vec2 point, float size, vec4 color)
+void renderer_draw_point(vec2 point, float size, int color)
 {
 	mat4 translation = mat4_translate((vec3){ point.x, point.y, 0.0f });
 	mat4 scale = mat4_scale((vec3) { size, size, 1.0f });
@@ -87,7 +94,7 @@ void renderer_draw_point(vec2 point, float size, vec4 color)
 	renderer_draw_mesh(&quad_mesh, model, color);
 }
 
-void renderer_draw_line(vec2 p0, vec2 p1, float width, vec4 color)
+void renderer_draw_line(vec2 p0, vec2 p1, float width, int color)
 {
 	float x = p1.x - p0.x;
 	float y = p0.y - p1.y;
@@ -102,7 +109,7 @@ void renderer_draw_line(vec2 p0, vec2 p1, float width, vec4 color)
 	renderer_draw_mesh(&quad_mesh, model, color);
 }
 
-void renderer_draw_quad(vec2 center, vec2 size, float angle, vec4 color)
+void renderer_draw_quad(vec2 center, vec2 size, float angle, int color)
 {
 	mat4 translation = mat4_translate((vec3) { center.x, center.y, 0.0f });
 	mat4 scale = mat4_scale((vec3) { size.x, size.y, 1.0f });
@@ -124,6 +131,9 @@ static void init_shader()
 	view_location = glGetUniformLocation(program, "u_view");
 	projection_location = glGetUniformLocation(program, "u_projection");
 	color_location = glGetUniformLocation(program, "u_color");
+
+	GLuint palette_location = glGetUniformLocation(program, "u_palette");
+	glUniform1i(palette_location, 0);
 }
 
 static void init_quad()

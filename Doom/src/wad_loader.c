@@ -83,6 +83,16 @@ int wad_find_lump(const char* lumpname, const wad* wad)
 	return -1;
 }
 
+int wad_read_playpal(palette* pal, const wad* wad)
+{
+	int playpal_index = wad_find_lump("PLAYPAL", wad);
+	if (playpal_index < 0)
+		return 1;
+
+	memcpy(pal->colors, wad->lumps[playpal_index].data, NUM_COLORS * 3);
+	return 0;
+}
+
 #define THINGS_IDX 1
 #define LINEDEFS_IDX 2
 #define SIDEDEFS_IDX 3
