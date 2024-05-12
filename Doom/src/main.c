@@ -2,6 +2,7 @@
 #include "renderer.h"
 #include "wad_loader.h"
 #include "input.h"
+#include "gl_utilities.h"
 
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
@@ -9,8 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define WIDTH 1280
-#define HEIGHT 720
+#define WIDTH 1920
+#define HEIGHT 1080
 
 int main(int argc, char** argv)
 {
@@ -56,7 +57,22 @@ int main(int argc, char** argv)
 	}
 
 	renderer_init(WIDTH, HEIGHT);
-	engine_init(&wad, "E1M1");
+	renderer_set_draw_texture(0);
+	//engine_init(&wad, "E1M1");
+
+	palette palette;
+	wad_read_playpal(&palette, &wad);
+	GLuint palette_texture = palette_generate_texture(&palette);
+	renderer_set_palette_texture(palette_texture);
+
+	size_t   num_textures;
+	patch* patches = wad_read_patches(&num_textures, &wad);
+	GLuint* tex = malloc(sizeof(GLuint) * num_textures);
+	for (int i = 0; i < num_textures; i++)
+		tex[i] = generate_texture(patches[i].width, patches[i].height, patches[i].data);
+
+	size_t index = 0;
+	float  time = .5f;
 
 	char title[128];
 	float last = 0.0f;
@@ -66,14 +82,25 @@ int main(int argc, char** argv)
 		float delta = now - last;
 		last = now;
 
-		engine_update(delta);
+		time -= delta;
+		if (time <= 0.0f)
+		{
+			time = 0.5f;
+			if (++index >= num_textures)
+				index = 0;
+		}
+
+		//engine_update(delta);
 
 		glfwPollEvents();
 		snprintf(title, 128, "Doom1993-Remake | %.0f fps", 1.0f / delta);
 		glfwSetWindowTitle(window, title);
 
 		renderer_clear();
-		engine_render();
+		//engine_render();
+		renderer_set_draw_texture(tex[index]);
+		renderer_set_texture_index(0);
+		renderer_draw_quad((vec2) { WIDTH / 2.0f, HEIGHT / 2.0f }, (vec2) { patches[index].width * 5.0f, patches[index].height * 5.0f }, 0.0f, 0);
 		glfwSwapBuffers(window);
 	}
 

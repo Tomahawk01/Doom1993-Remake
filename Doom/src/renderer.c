@@ -174,10 +174,10 @@ static void init_shader()
 static void init_quad()
 {
 	vertex vertices[] = {
-		{.position = { 0.5f, 0.5f, 0.0f}},	// top-right
-		{.position = { 0.5f,-0.5f, 0.0f}},	// bottom-right
-		{.position = {-0.5f,-0.5f, 0.0f}},  // bottom-left
-		{.position = {-0.5f, 0.5f, 0.0f}}	// top-left
+		{.position = { 0.5f, 0.5f, 0.0f}, .tex_coords = {1.0f, 1.0f}},	// top-right
+		{.position = { 0.5f,-0.5f, 0.0f}, .tex_coords = {1.0f, 0.0f}},	// bottom-right
+		{.position = {-0.5f,-0.5f, 0.0f}, .tex_coords = {0.0f, 0.0f}},  // bottom-left
+		{.position = {-0.5f, 0.5f, 0.0f}, .tex_coords = {0.0f, 1.0f}}	// top-left
 	};
 
 	uint32_t indices[] = {
