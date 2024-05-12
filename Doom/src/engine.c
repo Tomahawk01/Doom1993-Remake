@@ -6,6 +6,7 @@
 
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,13 @@ typedef struct wall_node
 	struct wall_node* next;
 } wall_node, wall_list;
 
+typedef struct flat_node
+{
+	mesh mesh;
+	const sector* sector;
+	struct flat_node* next;
+} flat_node, flat_list;
+
 static vec3 get_random_color(const void* seed);
 static mat4 model_from_vertices(vec3 p0, vec3 p1, vec3 p2, vec3 p3);
 
@@ -32,6 +40,7 @@ static vec2 last_mouse_pos;
 static mesh quad_mesh;
 
 static wall_list* w_list;
+static flat_list* f_list;
 
 void engine_init(wad* wad, const char* mapname)
 {
@@ -78,6 +87,68 @@ void engine_init(wad* wad, const char* mapname)
 	{
 		fprintf(stderr, "Failed to read GL info for map '%s' from WAD file\n", mapname);
 		return;
+	}
+
+	flat_node** flat_node_ptr = &f_list;
+	for (int i = 0; i < gl_map.num_subsectors; i++)
+	{
+		flat_node* node = malloc(sizeof(flat_node));
+		node->next = NULL;
+		node->sector = NULL;
+
+		gl_subsector* subsector = &gl_map.subsectors[i];
+		size_t n_vertices = subsector->num_segs;
+		vertex* vertices = malloc(sizeof(vertex) * n_vertices);
+
+		for (int j = 0; j < subsector->num_segs; j++)
+		{
+			gl_segment* segment = &gl_map.segments[j + subsector->first_seg];
+			
+			if (node->sector == NULL && segment->linedef != 0xffff)
+			{
+				linedef* linedef = &map.linedefs[segment->linedef];
+				int sector = -1;
+				if (linedef->flags & LINEDEF_FLAGS_TWO_SIDED)
+				{
+					if (segment->side == 0)
+						sector = map.sidedefs[linedef->front_sidedef].sector_index;
+					else
+						sector = map.sidedefs[linedef->back_sidedef].sector_index;
+				}
+				else
+				{
+					sector = map.sidedefs[linedef->front_sidedef].sector_index;
+				}
+
+				if (sector >= 0)
+					node->sector = &map.sectors[sector];
+			}
+
+			vec2 v;
+			if (segment->start_vertex & VERT_IS_GL)
+				v = gl_map.vertices[segment->start_vertex & 0x7fff];
+			else
+				v = map.vertices[segment->start_vertex];
+
+			vertices[j] = (vertex){
+				.position = {v.x / 100.0f, 0.0f, v.y / 100.0f}
+			};
+		}
+
+		// Triangulate will form (n - 2) triangles so 3 * (n - 2) indices are required
+		size_t n_indices = 3 * (n_vertices - 2);
+		uint32_t* indices = malloc(sizeof(uint32_t) * n_indices);
+		for (int j = 0, k = 1; j < n_indices; j += 3, k++)
+		{
+			indices[j] = 0;
+			indices[j + 1] = k;
+			indices[j + 2] = k + 1;
+		}
+
+		mesh_create(&node->mesh, n_vertices, vertices, n_indices, indices);
+
+		*flat_node_ptr = node;
+		flat_node_ptr = &node->next;
 	}
 
 	wall_node** wall_node_ptr = &w_list;
@@ -198,6 +269,15 @@ void engine_render()
 	{
 		vec3 color = vec3_scale(get_random_color(node->sector), node->sector->light_level / 255.0f);
 		renderer_draw_mesh(&quad_mesh, node->model, (vec4) { color.x, color.y, color.z, 1.0f });
+	}
+
+	for (flat_node* node = f_list; node != NULL; node = node->next)
+	{
+		vec3 color = vec3_scale(get_random_color(node->sector), node->sector->light_level / 255.0f * 0.8f);
+		// Floor rendering
+		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->floor / SCALE, 0.0f }), (vec4) { color.x, color.y, color.z, 1.0f });
+		// Ceiling rendering
+		renderer_draw_mesh(&node->mesh, mat4_translate((vec3) { 0.0f, node->sector->ceiling / SCALE, 0.0f }), (vec4) { color.x, color.y, color.z, 1.0f });
 	}
 }
 

@@ -13,12 +13,12 @@ static void init_projection();
 
 const char* vertSrc =
 	"#version 330 core\n"
-	"layout(location = 0) in vec2 pos;\n"
+	"layout(location = 0) in vec3 pos;\n"
 	"uniform mat4 u_model;\n"
 	"uniform mat4 u_view;\n"
 	"uniform mat4 u_projection;\n"
 	"void main() {\n"
-	"  gl_Position = u_projection * u_view * u_model * vec4(pos, 0.0, 1.0);\n"
+	"  gl_Position = u_projection * u_view * u_model * vec4(pos, 1.0);\n"
 	"}\n";
 
 const char* fragSrc =
