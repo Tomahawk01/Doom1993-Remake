@@ -128,7 +128,7 @@ int wad_read_patch(patch* patch, const char* patch_name, const wad* wad)
 	patch->width = READ_I16(patch_lump->data, 0);
 	patch->height = READ_I16(patch_lump->data, 2);
 	patch->data = malloc(patch->width * patch->height);
-	memset(patch->data, 0, patch->width * patch->height);
+	memset(patch->data, 247, patch->width * patch->height);
 
 	for (int16_t x = 0; x < patch->width; x++)
 	{
@@ -171,6 +171,52 @@ patch* wad_read_patches(size_t* num, const wad* wad)
 	}
 
 	return patches;
+}
+
+wall_tex* wad_read_textures(size_t* num, const char* lumpname, const wad* wad)
+{
+	size_t num_patches;
+	patch* patches = wad_read_patches(&num_patches, wad);
+
+	int lump_index = wad_find_lump(lumpname, wad);
+	lump* tex_lump = &wad->lumps[lump_index];
+	*num = READ_I32(tex_lump->data, 0);
+
+	wall_tex* textures = malloc(sizeof(wall_tex) * *num);
+	for (int i = 0; i < *num; i++)
+	{
+		uint32_t offset = READ_I32(tex_lump->data, 4 * i + 4);
+		textures[i].width = READ_I16(tex_lump->data, offset + 12);
+		textures[i].height = READ_I16(tex_lump->data, offset + 14);
+
+		textures[i].data = malloc(textures[i].width * textures[i].height);
+		memset(textures[i].data, 247, textures[i].width * textures[i].height);
+
+		uint16_t num_patches = READ_I16(tex_lump->data, offset + 20);
+		for (int j = 0; j < num_patches; j++)
+		{
+			uint16_t origin_x = READ_I16(tex_lump->data, offset + 22 + j * 10);
+			uint16_t origin_y = READ_I16(tex_lump->data, offset + 24 + j * 10);
+			uint16_t patch_index = READ_I16(tex_lump->data, offset + 26 + j * 10);
+
+			patch patch = patches[patch_index];
+			for (int x = 0; x < patch.width; x++)
+			{
+				for (int y = 0; y < patch.height; y++)
+				{
+					uint8_t data_byte = patch.data[y * patch.width + x];
+					int tex_x = x + origin_x;
+					int tex_y = y + origin_y;
+
+					if (tex_x >= 0 && tex_x < textures[i].width &&
+						tex_y >= 0 && tex_y < textures[i].height && data_byte != 247)
+						textures[i].data[tex_y * textures[i].width + tex_x] = data_byte;
+				}
+			}
+		}
+	}
+
+	return textures;
 }
 
 #define THINGS_IDX 1
