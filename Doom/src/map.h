@@ -10,6 +10,8 @@ typedef struct sector
 {
 	int16_t floor;
 	int16_t ceiling;
+
+	int16_t light_level;
 } sector;
 
 typedef struct sidedef

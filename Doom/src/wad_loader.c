@@ -168,5 +168,6 @@ void read_sectors(map* map, const lump* lump)
 	{
 		map->sectors[j].floor = (int16_t)READ_I16(lump->data, i);
 		map->sectors[j].ceiling = (int16_t)READ_I16(lump->data, i + 2);
+		map->sectors[j].light_level = (int16_t)READ_I16(lump->data, i + 20);
 	}
 }
