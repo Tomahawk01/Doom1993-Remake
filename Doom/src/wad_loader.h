@@ -1,5 +1,6 @@
 #pragma once
 #include "map.h"
+#include "gl_map.h"
 
 #include <stdint.h>
 
@@ -23,3 +24,4 @@ void wad_free(wad* wad);
 
 int wad_find_lump(const char* lumpname, const wad* wad);
 int wad_read_map(const char* mapname, map* map, const wad* wad);
+int wad_read_gl_map(const char* gl_mapname, gl_map* map, const wad* wad);
