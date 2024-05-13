@@ -276,28 +276,46 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 			sidedef* back_side = &map->sidedefs[ld->back_sidedef];
 			sector* back_sect = &map->sectors[back_side->sector_index];
 
-			vec3 floor0 = { start.x, front_sect->floor, -start.y };
-			vec3 floor1 = { end.x, front_sect->floor, -end.y };
-			vec3 floor2 = { end.x, back_sect->floor, -end.y };
-			vec3 floor3 = { start.x, back_sect->floor, -start.y };
+			sidedef* sidedef = front_side;
 
-			floor0 = vec3_scale(floor0, 1.0f / SCALE);
-			floor1 = vec3_scale(floor1, 1.0f / SCALE);
-			floor2 = vec3_scale(floor2, 1.0f / SCALE);
-			floor3 = vec3_scale(floor3, 1.0f / SCALE);
+			{
+				vec3 p0 = { start.x, front_sect->floor, -start.y };
+				vec3 p1 = { end.x, front_sect->floor, -end.y };
+				vec3 p2 = { end.x, back_sect->floor, -end.y };
+				vec3 p3 = { start.x, back_sect->floor, -start.y };
 
-			srand((uintptr_t)front_sect);
-			int color = rand() % NUM_COLORS;
+				const float x = p1.x - p0.x, y = p1.z - p0.z;
+				const float width = sqrtf(x * x + y * y), height = fabsf(p3.y - p0.y);
 
-			vertex floor_vertices[] = {
-				{.position = floor0, .texture_index = color, .texture_type = 0},
-				{.position = floor1, .texture_index = color, .texture_type = 0},
-				{.position = floor2, .texture_index = color, .texture_type = 0},
-				{.position = floor3, .texture_index = color, .texture_type = 0}
-			};
+				p0 = vec3_scale(p0, 1.f / SCALE);
+				p1 = vec3_scale(p1, 1.f / SCALE);
+				p2 = vec3_scale(p2, 1.f / SCALE);
+				p3 = vec3_scale(p3, 1.f / SCALE);
 
-			mesh_create(&floor_node->mesh, 4, floor_vertices, 6, indices);
-			floor_node->sector = front_sect;
+				float tw = wall_textures_info[sidedef->lower].width;
+				float th = wall_textures_info[sidedef->lower].height;
+
+				float w = width / tw;
+				float h = height / th;
+				float x_off = sidedef->x_off / tw;
+				float y_off = sidedef->y_off / th;
+				if (ld->flags & LINEDEF_FLAGS_LOWER_UNPEGGED)
+					y_off += (front_sect->ceiling - back_sect->floor) / th;
+
+				float tx0 = x_off, ty0 = y_off + h;
+				float tx1 = x_off + w, ty1 = y_off;
+
+				vertex vertices[] = {
+					{p0, {tx0, ty0}, 0, 2},
+					{p1, {tx1, ty0}, 0, 2},
+					{p2, {tx1, ty1}, 0, 2},
+					{p3, {tx0, ty1}, 0, 2},
+				};
+
+				mesh_create(&floor_node->mesh, 4, vertices, 6, indices);
+				floor_node->sector = front_sect;
+				floor_node->texture = wall_textures[sidedef->lower];
+			}
 
 			*draw_node_ptr = floor_node;
 			draw_node_ptr = &floor_node->next;
@@ -306,27 +324,46 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 			draw_node* ceil_node = malloc(sizeof(draw_node));
 			ceil_node->next = NULL;
 
-			vec3 ceil0 = { start.x, front_sect->ceiling, -start.y };
-			vec3 ceil1 = { end.x, front_sect->ceiling, -end.y };
-			vec3 ceil2 = { end.x, back_sect->ceiling, -end.y };
-			vec3 ceil3 = { start.x, back_sect->ceiling, -start.y };
+			{
+				vec3 p0 = { start.x, front_sect->ceiling, -start.y };
+				vec3 p1 = { end.x, front_sect->ceiling, -end.y };
+				vec3 p2 = { end.x, back_sect->ceiling, -end.y };
+				vec3 p3 = { start.x, back_sect->ceiling, -start.y };
 
-			ceil0 = vec3_scale(ceil0, 1.f / SCALE);
-			ceil1 = vec3_scale(ceil1, 1.f / SCALE);
-			ceil2 = vec3_scale(ceil2, 1.f / SCALE);
-			ceil3 = vec3_scale(ceil3, 1.f / SCALE);
+				const float x = p1.x - p0.x;
+				float y = p1.z - p0.z;
+				const float width = sqrtf(x * x + y * y);
+				const float height = -fabsf(p3.y - p0.y);
 
-			vertex ceil_vertices[] = {
-				{.position = ceil0, .texture_index = color, .texture_type = 0},
-				{.position = ceil1, .texture_index = color, .texture_type = 0},
-				{.position = ceil2, .texture_index = color, .texture_type = 0},
-				{.position = ceil3, .texture_index = color, .texture_type = 0}
-			};
+				p0 = vec3_scale(p0, 1.f / SCALE);
+				p1 = vec3_scale(p1, 1.f / SCALE);
+				p2 = vec3_scale(p2, 1.f / SCALE);
+				p3 = vec3_scale(p3, 1.f / SCALE);
 
-			mesh_create(&ceil_node->mesh, 4, ceil_vertices, 6, indices);
-			ceil_node->sector = front_sect;
+				float tw = wall_textures_info[sidedef->upper].width;
+				float th = wall_textures_info[sidedef->upper].height;
 
-			floor_node->texture = ceil_node->texture = -1;
+				float w = width / tw, h = height / th;
+				float x_off = sidedef->x_off / tw, y_off = sidedef->y_off / th;
+				if (ld->flags & LINEDEF_FLAGS_UPPER_UNPEGGED)
+					y_off -= h;
+
+				float tx0 = x_off;
+				float ty0 = y_off + h;
+				float tx1 = x_off + w;
+				float ty1 = y_off;
+
+				vertex vertices[] = {
+					{p0, {tx0, ty0}, 0, 2},
+					{p1, {tx1, ty0}, 0, 2},
+					{p2, {tx1, ty1}, 0, 2},
+					{p3, {tx0, ty1}, 0, 2},
+				};
+
+				mesh_create(&ceil_node->mesh, 4, vertices, 6, indices);
+				ceil_node->sector = front_sect;
+				ceil_node->texture = wall_textures[sidedef->upper];
+			}
 
 			*draw_node_ptr = ceil_node;
 			draw_node_ptr = &ceil_node->next;
