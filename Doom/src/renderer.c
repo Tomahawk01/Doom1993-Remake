@@ -13,10 +13,10 @@ static void init_projection();
 
 const char* vertSrc =
 	"#version 330 core\n"
-	"layout(location = 0) in vec3 pos;\n"
-	"layout(location = 1) in vec2 texCoords;\n"
-	"layout(location = 2) in int texIndex;\n"
-	"layout(location = 3) in int texType;\n"
+	"layout (location = 0) in vec3 pos;\n"
+	"layout (location = 1) in vec2 texCoords;\n"
+	"layout (location = 2) in int texIndex;\n"
+	"layout (location = 3) in int texType;\n"
 	"out vec2 TexCoords;\n"
 	"flat out int TexIndex;\n"
 	"flat out int TexType;\n"
@@ -36,14 +36,17 @@ const char* fragSrc =
 	"flat in int TexIndex;\n"
 	"flat in int TexType;\n"
 	"out vec4 fragColor;\n"
-	"uniform usampler2DArray u_tex;\n"
+	"uniform usampler2D u_tex;\n"
+	"uniform usampler2DArray u_tex_array;\n"
 	"uniform sampler1D u_pallete;\n"
 	"void main() {\n"
-	"  if (TexIndex == -1) discard;\n"
-	"  if (TexType == 0) {\n"
+	"  if (TexIndex == -1) { discard; }\n"
+	"  else if (TexType == 0) {\n"
 	"    fragColor = texelFetch(u_pallete, TexIndex, 0);\n"
-	"  } else {\n"
-	"    fragColor = texelFetch(u_pallete, int(texture(u_tex, vec3(TexCoords, TexIndex)).r), 0);\n"
+	"  } else if (TexType == 1) {\n"
+	"    fragColor = texelFetch(u_pallete, int(texture(u_tex_array, vec3(TexCoords, TexIndex)).r), 0);\n"
+	"  } else if (TexType == 2) {\n"
+	"    fragColor = texelFetch(u_pallete, int(texture(u_tex, TexCoords).r), 0);\n"
 	"  }\n"
 	"}\n";
 
@@ -78,6 +81,12 @@ void renderer_set_palette_texture(GLuint palette_texture)
 }
 
 void renderer_set_draw_texture(GLuint texture)
+{
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, texture);
+}
+
+void renderer_set_draw_texture_array(GLuint texture)
 {
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D_ARRAY, texture);
@@ -123,8 +132,11 @@ static void init_shader()
 	GLuint palette_location = glGetUniformLocation(program, "u_palette");
 	glUniform1i(palette_location, 0);
 
+	GLuint texture_array_location = glGetUniformLocation(program, "u_tex_array");
+	glUniform1i(texture_array_location, 1);
+
 	GLuint texture_location = glGetUniformLocation(program, "u_tex");
-	glUniform1i(texture_location, 1);
+	glUniform1i(texture_location, 2);
 }
 
 static void init_quad()

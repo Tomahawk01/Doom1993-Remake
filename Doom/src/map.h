@@ -5,6 +5,8 @@
 #include <stdint.h>
 
 #define LINEDEF_FLAGS_TWO_SIDED 0x0004
+#define LINEDEF_FLAGS_UPPER_UNPEGGED 0x0008
+#define LINEDEF_FLAGS_LOWER_UNPEGGED 0x0010
 
 typedef struct sector
 {
@@ -19,6 +21,8 @@ typedef struct sector
 
 typedef struct sidedef
 {
+	int16_t x_off, y_off;
+	uint16_t upper, lower, middle;
 	uint16_t sector_index;
 } sidedef;
 
