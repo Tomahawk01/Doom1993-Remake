@@ -26,7 +26,13 @@ int main(int argc, char** argv)
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
+	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+	int xPos = (mode->width - WIDTH) / 2;
+	int yPos = (mode->height - HEIGHT) / 2;
+
 	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Doom1993-Remake", NULL, NULL);
+	glfwSetWindowPos(window, xPos, yPos);
 	glfwMakeContextCurrent(window);
 
 	// V-Sync
@@ -50,7 +56,7 @@ int main(int argc, char** argv)
 	glfwSetCursorPosCallback(window, input_mouse_position_callback);
 
 	wad wad;
-	if (wad_load_from_file("res/doom.wad", &wad) != 0)
+	if (wad_load_from_file("res/doom1.wad", &wad) != 0)
 	{
 		printf("Failed to load WAD file\n");
 		return -1;
