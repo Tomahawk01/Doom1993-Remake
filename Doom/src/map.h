@@ -8,6 +8,20 @@
 #define LINEDEF_FLAGS_UPPER_UNPEGGED 0x0008
 #define LINEDEF_FLAGS_LOWER_UNPEGGED 0x0010
 
+enum thing_types
+{
+	THING_P1_START = 1
+};
+
+typedef struct thing_info
+{
+	uint16_t type;
+	int height;
+} thing_info;
+
+extern int map_num_thing_infos;
+extern thing_info map_thing_info[];
+
 typedef struct sector
 {
 	int16_t floor;
@@ -35,6 +49,13 @@ typedef struct linedef
 	uint16_t back_sidedef;
 } linedef;
 
+typedef struct thing
+{
+	uint16_t type;
+	vec2 position;
+	float angle;
+} thing;
+
 typedef struct map
 {
 	size_t num_vertices;
@@ -49,4 +70,7 @@ typedef struct map
 
 	size_t num_sectors;
 	sector* sectors;
+
+	size_t num_things;
+	thing* things;
 } map;

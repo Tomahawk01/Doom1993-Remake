@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define FOV (M_PI / 2.0f)	// 90 degrees
 #define PLAYER_SPEED (500.0f)
@@ -48,12 +49,6 @@ static draw_list* d_list;
 
 void engine_init(wad* wad, const char* mapname)
 {
-	cam = (camera){
-		.position = {0.0f, 0.0f, 300.0f},
-		.yaw = M_PI_2,
-		.pitch = 0.0f
-	};
-
 	vec2 size = renderer_get_size();
 	mat4 projection = mat4_perspective(FOV, size.x / size.y, 0.1f, 10000.0f);
 	renderer_set_projection(projection);
@@ -98,6 +93,34 @@ void engine_init(wad* wad, const char* mapname)
 		return;
 	}
 
+	for (int i = 0; i < map.num_things; i++)
+	{
+		thing* thing = &map.things[i];
+
+		if (thing->type == THING_P1_START)
+		{
+			thing_info* info = NULL;
+
+			for (int i = 0; i < map_num_thing_infos; i++)
+			{
+				if (thing->type == map_thing_info[i].type)
+				{
+					info = &map_thing_info[i];
+					break;
+				}
+			}
+
+			if (info == NULL)
+				continue;
+
+			cam = (camera){
+				.position = {thing->position.x, info->height, -thing->position.y},
+				.yaw = thing->angle,
+				.pitch = 0.0f
+			};
+		}
+	}
+
 	generate_meshes(&map, &gl_map);
 }
 
@@ -107,21 +130,42 @@ void engine_update(float dt)
 
 	float speed = (is_button_pressed(KEY_LSHIFT) ? PLAYER_SPEED * 1.7f : PLAYER_SPEED) * dt;
 
-	if (is_button_pressed(KEY_W))
-		cam.position = vec3_add(cam.position, vec3_scale(cam.forward, speed));
-	if (is_button_pressed(KEY_S))
-		cam.position = vec3_add(cam.position, vec3_scale(cam.forward, -speed));
-	if (is_button_pressed(KEY_A))
-		cam.position = vec3_add(cam.position, vec3_scale(cam.right, -speed));
-	if (is_button_pressed(KEY_D))
-		cam.position = vec3_add(cam.position, vec3_scale(cam.right, speed));
+	vec3 forward = cam.forward;
+	vec3 right = cam.right;
+	forward.y = right.y = 0.0f;
+	forward = vec3_normalize(forward);
+	right = vec3_normalize(right);
 
+	if (is_button_pressed(KEY_W) || is_button_pressed(KEY_UP))
+		cam.position = vec3_add(cam.position, vec3_scale(forward, speed));
+	if (is_button_pressed(KEY_S) || is_button_pressed(KEY_DOWN))
+		cam.position = vec3_add(cam.position, vec3_scale(forward, -speed));
+	if (is_button_pressed(KEY_A))
+		cam.position = vec3_add(cam.position, vec3_scale(right, -speed));
+	if (is_button_pressed(KEY_D))
+		cam.position = vec3_add(cam.position, vec3_scale(right, speed));
+
+	float turn_speed = 4.0f * dt;
+	if (is_button_pressed(KEY_RIGHT))
+		cam.yaw += turn_speed;
+	if (is_button_pressed(KEY_LEFT))
+		cam.yaw -= turn_speed;
+
+	if (is_button_pressed(KEY_ESCAPE))
+		set_mouse_captured(0);
 	if (is_button_pressed(MOUSE_RIGHT))
+		set_mouse_captured(1);
+
+	if (is_button_pressed(KEY_EQUAL))
+		cam.pitch = 0.0f;
+
+	static bool is_first = true;
+	if (is_mouse_captured())
 	{
-		if (!is_mouse_captured())
+		if (is_first)
 		{
 			last_mouse_pos = get_mouse_position();
-			set_mouse_captured(1);
+			is_first = false;
 		}
 
 		vec2 curr_mouse_pos = get_mouse_position();
@@ -134,9 +178,9 @@ void engine_update(float dt)
 		// Clamp the camera vertically
 		cam.pitch = max(-M_PI_2 + 0.05, min(M_PI_2 - 0.05, cam.pitch));
 	}
-	else if (is_mouse_captured())
+	else
 	{
-		set_mouse_captured(0);
+		is_first = true;
 	}
 }
 
@@ -173,6 +217,9 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 		sector* sector = NULL;
 		gl_subsector* subsector = &gl_map->subsectors[i];
 		size_t n_vertices = subsector->num_segs;
+		if (n_vertices < 3)
+			continue;
+
 		vertex* floor_vertices = malloc(sizeof(vertex) * n_vertices);
 		vertex* ceil_vertices = malloc(sizeof(vertex) * n_vertices);
 

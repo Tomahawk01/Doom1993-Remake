@@ -1,6 +1,7 @@
 #include "wad_loader.h"
 #include "utils.h"
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -232,8 +233,9 @@ wall_tex* wad_read_textures(size_t* num, const char* lumpname, const wad* wad)
 
 static void read_vertices(map* map, const lump* lump);
 static void read_linedefs(map* map, const lump* lump);
-static void read_sidedefs(map* map, const lump* lump, const wall_tex* tex, int num_tex);
+static void read_things(map* map, const lump* lump);
 static void read_sectors(map* map, const lump* lump, const wad* wad);
+static void read_sidedefs(map* map, const lump* lump, const wall_tex* tex, int num_tex);
 
 int wad_read_map(const char* mapname, map* map, const wad* wad, const wall_tex* tex, int num_tex)
 {
@@ -243,6 +245,7 @@ int wad_read_map(const char* mapname, map* map, const wad* wad, const wall_tex* 
 
 	read_vertices(map, &wad->lumps[map_index + VERTEXES_IDX]);
 	read_linedefs(map, &wad->lumps[map_index + LINEDEFS_IDX]);
+	read_things(map, &wad->lumps[map_index + THINGS_IDX]);
 	read_sidedefs(map, &wad->lumps[map_index + SIDEDEFS_IDX], tex, num_tex);
 	read_sectors(map, &wad->lumps[map_index + SECTORS_IDX], wad);
 
@@ -432,5 +435,21 @@ void read_sectors(map* map, const lump* lump, const wad* wad)
 			map->sectors[j].ceiling_tex = -1;
 		else
 			map->sectors[j].ceiling_tex = ceiling - f_start - 1;
+	}
+}
+
+void read_things(map* map, const lump* lump)
+{
+	map->num_things = lump->size / 10; // each thing is 10 bytes
+	map->things = malloc(sizeof(thing) * map->num_things);
+
+	for (int i = 0, j = 0; i < lump->size; i += 10, j++)
+	{
+		map->things[j].position.x = (int16_t)READ_I16(lump->data, i);
+		map->things[j].position.y = (int16_t)READ_I16(lump->data, i + 2);
+		map->things[j].type = READ_I16(lump->data, i + 6);
+
+		float angle = (int16_t)READ_I16(lump->data, i + 4);
+		map->things[j].angle = angle * M_PI / 180.f + M_PI;
 	}
 }
