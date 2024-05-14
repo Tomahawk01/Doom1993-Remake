@@ -1,4 +1,5 @@
 #include "wad_loader.h"
+#include "utils.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -76,7 +77,7 @@ int wad_find_lump(const char* lumpname, const wad* wad)
 {
 	for (int i = 0; i < wad->num_lumps; i++)
 	{
-		if (strcmp(wad->lumps[i].name, lumpname) == 0)
+		if (strcmp_nocase(wad->lumps[i].name, lumpname) == 0)
 			return i;
 	}
 
@@ -196,8 +197,8 @@ wall_tex* wad_read_textures(size_t* num, const char* lumpname, const wad* wad)
 		uint16_t num_patches = READ_I16(tex_lump->data, offset + 20);
 		for (int j = 0; j < num_patches; j++)
 		{
-			uint16_t origin_x = READ_I16(tex_lump->data, offset + 22 + j * 10);
-			uint16_t origin_y = READ_I16(tex_lump->data, offset + 24 + j * 10);
+			int16_t origin_x = READ_I16(tex_lump->data, offset + 22 + j * 10);
+			int16_t origin_y = READ_I16(tex_lump->data, offset + 24 + j * 10);
 			uint16_t patch_index = READ_I16(tex_lump->data, offset + 26 + j * 10);
 
 			patch patch = patches[patch_index];
@@ -372,7 +373,7 @@ void read_sidedefs(map* map, const lump* lump, const wall_tex* tex, int num_tex)
 	{
 		for (int k = 0; k < num_tex; k++)
 		{
-			if (strncmp((char*)lump->data + i + 4, tex[k].name, 8) == 0)
+			if (strncmp_nocase((char*)lump->data + i + 4, tex[k].name, 8) == 0)
 			{
 				map->sidedefs[j].upper = k;
 				break;
@@ -381,7 +382,7 @@ void read_sidedefs(map* map, const lump* lump, const wall_tex* tex, int num_tex)
 
 		for (int k = 0; k < num_tex; k++)
 		{
-			if (strncmp((char*)lump->data + i + 12, tex[k].name, 8) == 0)
+			if (strncmp_nocase((char*)lump->data + i + 12, tex[k].name, 8) == 0)
 			{
 				map->sidedefs[j].lower = k;
 				break;
@@ -390,7 +391,7 @@ void read_sidedefs(map* map, const lump* lump, const wall_tex* tex, int num_tex)
 
 		for (int k = 0; k < num_tex; k++)
 		{
-			if (strncmp((char*)lump->data + i + 20, tex[k].name, 8) == 0)
+			if (strncmp_nocase((char*)lump->data + i + 20, tex[k].name, 8) == 0)
 			{
 				map->sidedefs[j].middle = k;
 				break;
