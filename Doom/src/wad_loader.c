@@ -420,14 +420,16 @@ void read_sectors(map* map, const lump* lump, const wad* wad)
 
 		memcpy(name, &lump->data[i + 4], 8);
 		int floor = wad_find_lump(name, wad);
-		if (floor <= f_start || floor >= f_end)
-			floor = -1;
-		map->sectors[j].floor_tex = floor - f_start - 1;
+		if (floor <= f_start || floor >= f_end - 1)
+			map->sectors[j].floor_tex = -1;
+		else
+			map->sectors[j].floor_tex = floor - f_start - 1;
 
 		memcpy(name, &lump->data[i + 12], 8);
 		int ceiling = wad_find_lump(name, wad);
-		if (ceiling <= f_start || ceiling >= f_end)
-			ceiling = -1;
-		map->sectors[j].ceiling_tex = ceiling - f_start - 1;
+		if (ceiling <= f_start || ceiling >= f_end - 1)
+			map->sectors[j].ceiling_tex = -1;
+		else
+			map->sectors[j].ceiling_tex = ceiling - f_start - 1;
 	}
 }

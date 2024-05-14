@@ -14,10 +14,8 @@
 #include <string.h>
 
 #define FOV (M_PI / 2.0f)	// 90 degrees
-#define PLAYER_SPEED (5.0f)
+#define PLAYER_SPEED (500.0f)
 #define MOUSE_SENSITIVITY (0.002f) // in radians
-
-#define SCALE (100.0f)
 
 typedef struct draw_node
 {
@@ -39,40 +37,26 @@ static palette pal;
 static wall_tex_info* wall_textures_info;
 static size_t num_flats;
 static size_t num_wall_textures;
+static int sky_flat;
 static GLuint flat_texture_array;
 static GLuint* wall_textures;
 
 static camera cam;
 static vec2 last_mouse_pos;
-static mesh quad_mesh;
 
 static draw_list* d_list;
 
 void engine_init(wad* wad, const char* mapname)
 {
 	cam = (camera){
-		.position = {0.0f, 0.0f, 3.0f},
+		.position = {0.0f, 0.0f, 300.0f},
 		.yaw = M_PI_2,
 		.pitch = 0.0f
 	};
 
 	vec2 size = renderer_get_size();
-	mat4 projection = mat4_perspective(FOV, size.x / size.y, 0.1f, 1000.0f);
+	mat4 projection = mat4_perspective(FOV, size.x / size.y, 0.1f, 10000.0f);
 	renderer_set_projection(projection);
-
-	vertex vertices[] = {
-		{.position = { 1.0f, 1.0f, 0.0f}},		// top-right
-		{.position = { 0.0f, 1.0f, 0.0f}},		// bottom-right
-		{.position = { 0.0f, 0.0f, 0.0f}},		// bottom-left
-		{.position = { 1.0f, 0.0f, 0.0f}}		// top-left
-	};
-
-	uint32_t indices[] = {
-		0, 1, 3,
-		1, 2, 3
-	};
-
-	mesh_create(&quad_mesh, 4, vertices, 6, indices);
 
 	char* gl_mapname = malloc(strlen(mapname) + 4);
 	gl_mapname[0] = 'G';
@@ -91,6 +75,8 @@ void engine_init(wad* wad, const char* mapname)
 	wad_read_playpal(&pal, wad);
 	GLuint palette_texture = palette_generate_texture(&pal);
 	renderer_set_palette_texture(palette_texture);
+
+	sky_flat = wad_find_lump("F_SKY1", wad) - wad_find_lump("F_START", wad) - 1;
 
 	flat_tex* flats = wad_read_flats(&num_flats, wad);
 	flat_texture_array = generate_flat_texture_array(flats, num_flats);
@@ -214,7 +200,7 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 				v = map->vertices[segment->start_vertex];
 
 			floor_vertices[j] = ceil_vertices[j] = (vertex){
-				.position = {v.x / SCALE, 0.0f, -v.y / SCALE},
+				.position = {v.x, 0.0f, -v.y},
 				.tex_coords = {v.x / FLAT_TEXTURE_SIZE, -v.y / FLAT_TEXTURE_SIZE},
 				.texture_type = 1
 			};
@@ -224,13 +210,13 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 		{
 			int floor_tex = sector->floor_tex, ceil_tex = sector->ceiling_tex;
 
-			floor_vertices[i].position.y = sector->floor / SCALE;
-			floor_vertices[i].texture_index =
-				floor_tex >= 0 && floor_tex < num_flats ? floor_tex : -1;
+			floor_vertices[i].position.y = sector->floor;
+			floor_vertices[i].texture_index = floor_tex >= 0 && floor_tex < num_flats ? floor_tex : -1;
 
-			ceil_vertices[i].position.y = sector->ceiling / SCALE;
-			ceil_vertices[i].texture_index =
-				ceil_tex >= 0 && ceil_tex < num_flats ? ceil_tex : -1;
+			ceil_vertices[i].position.y = sector->ceiling;
+			ceil_vertices[i].texture_index = ceil_tex >= 0 && ceil_tex < num_flats ? ceil_tex : -1;
+
+			floor_vertices[i].light = ceil_vertices[i].light = sector->light_level / 256.0f;
 		}
 
 		// Triangulate will form (n - 2) triangles so 3 * (n - 2) indices are required
@@ -287,11 +273,6 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 				const float x = p1.x - p0.x, y = p1.z - p0.z;
 				const float width = sqrtf(x * x + y * y), height = fabsf(p3.y - p0.y);
 
-				p0 = vec3_scale(p0, 1.f / SCALE);
-				p1 = vec3_scale(p1, 1.f / SCALE);
-				p2 = vec3_scale(p2, 1.f / SCALE);
-				p3 = vec3_scale(p3, 1.f / SCALE);
-
 				float tw = wall_textures_info[sidedef->lower].width;
 				float th = wall_textures_info[sidedef->lower].height;
 
@@ -306,10 +287,10 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 				float tx1 = x_off + w, ty1 = y_off;
 
 				vertex vertices[] = {
-					{p0, {tx0, ty0}, 0, 2},
-					{p1, {tx1, ty0}, 0, 2},
-					{p2, {tx1, ty1}, 0, 2},
-					{p3, {tx0, ty1}, 0, 2},
+					{p0, {tx0, ty0}, 0, 2, front_sect->light_level / 256.0f},
+					{p1, {tx1, ty0}, 0, 2, front_sect->light_level / 256.0f},
+					{p2, {tx1, ty1}, 0, 2, front_sect->light_level / 256.0f},
+					{p3, {tx0, ty1}, 0, 2, front_sect->light_level / 256.0f}
 				};
 
 				mesh_create(&floor_node->mesh, 4, vertices, 6, indices);
@@ -319,6 +300,9 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 
 			*draw_node_ptr = floor_node;
 			draw_node_ptr = &floor_node->next;
+
+			if (front_sect->ceiling_tex == sky_flat && back_sect->ceiling_tex == sky_flat)
+				continue;
 
 			// Ceiling
 			draw_node* ceil_node = malloc(sizeof(draw_node));
@@ -335,11 +319,6 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 				const float width = sqrtf(x * x + y * y);
 				const float height = -fabsf(p3.y - p0.y);
 
-				p0 = vec3_scale(p0, 1.f / SCALE);
-				p1 = vec3_scale(p1, 1.f / SCALE);
-				p2 = vec3_scale(p2, 1.f / SCALE);
-				p3 = vec3_scale(p3, 1.f / SCALE);
-
 				float tw = wall_textures_info[sidedef->upper].width;
 				float th = wall_textures_info[sidedef->upper].height;
 
@@ -354,10 +333,10 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 				float ty1 = y_off;
 
 				vertex vertices[] = {
-					{p0, {tx0, ty0}, 0, 2},
-					{p1, {tx1, ty0}, 0, 2},
-					{p2, {tx1, ty1}, 0, 2},
-					{p3, {tx0, ty1}, 0, 2},
+					{p0, {tx0, ty0}, 0, 2, front_sect->light_level / 256.0f},
+					{p1, {tx1, ty0}, 0, 2, front_sect->light_level / 256.0f},
+					{p2, {tx1, ty1}, 0, 2, front_sect->light_level / 256.0f},
+					{p3, {tx0, ty1}, 0, 2, front_sect->light_level / 256.0f}
 				};
 
 				mesh_create(&ceil_node->mesh, 4, vertices, 6, indices);
@@ -388,11 +367,6 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 			const float width = sqrtf(x * x + y * y);
 			const float height = p3.y - p0.y;
 
-			p0 = vec3_scale(p0, 1.0f / SCALE);
-			p1 = vec3_scale(p1, 1.0f / SCALE);
-			p2 = vec3_scale(p2, 1.0f / SCALE);
-			p3 = vec3_scale(p3, 1.0f / SCALE);
-
 			float tw = wall_textures_info[side->middle].width;
 			float th = wall_textures_info[side->middle].height;
 
@@ -408,10 +382,10 @@ static void generate_meshes(const map* map, const gl_map* gl_map)
 			float tx1 = x_off + w, ty1 = y_off;
 
 			vertex vertices[] = {
-				{p0, {tx0, ty0}, 0, 2},
-				{p1, {tx1, ty0}, 0, 2},
-				{p2, {tx1, ty1}, 0, 2},
-				{p3, {tx0, ty1}, 0, 2}
+				{p0, {tx0, ty0}, 0, 2, sect->light_level / 256.0f},
+				{p1, {tx1, ty0}, 0, 2, sect->light_level / 256.0f},
+				{p2, {tx1, ty1}, 0, 2, sect->light_level / 256.0f},
+				{p3, {tx0, ty1}, 0, 2, sect->light_level / 256.0f}
 			};
 
 			mesh_create(&node->mesh, 4, vertices, 6, indices);
