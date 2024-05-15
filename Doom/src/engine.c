@@ -33,6 +33,7 @@ typedef struct wall_tex_info
 } wall_tex_info;
 
 static void generate_meshes(const map* map, const gl_map* gl_map);
+static sector* map_get_sector(map* map, gl_map* gl_map, vec2 position);
 
 static palette pal;
 static wall_tex_info* wall_textures_info;
@@ -44,6 +45,10 @@ static GLuint* wall_textures;
 
 static camera cam;
 static vec2 last_mouse_pos;
+
+static float player_height;
+static map m;
+static gl_map gl_m;
 
 static draw_list* d_list;
 
@@ -60,8 +65,7 @@ void engine_init(wad* wad, const char* mapname)
 	gl_mapname[3] = 0;
 	strcat(gl_mapname, mapname);
 
-	gl_map gl_map;
-	if (wad_read_gl_map(gl_mapname, &gl_map, wad) != 0)
+	if (wad_read_gl_map(gl_mapname, &gl_m, wad) != 0)
 	{
 		fprintf(stderr, "Failed to read GL info for map '%s' from WAD file\n", mapname);
 		return;
@@ -85,17 +89,17 @@ void engine_init(wad* wad, const char* mapname)
 		wall_textures[i] = generate_texture(textures[i].width, textures[i].height, textures[i].data);
 		wall_textures_info[i] = (wall_tex_info){ textures[i].width, textures[i].height };
 	}
+	wad_free_wall_textures(textures, num_wall_textures);
 
-	map map;
-	if (wad_read_map(mapname, &map, wad, textures, num_wall_textures) != 0)
+	if (wad_read_map(mapname, &m, wad, textures, num_wall_textures) != 0)
 	{
 		fprintf(stderr, "Failed to read map '%s' from WAD file\n", mapname);
 		return;
 	}
 
-	for (int i = 0; i < map.num_things; i++)
+	for (int i = 0; i < m.num_things; i++)
 	{
-		thing* thing = &map.things[i];
+		thing* thing = &m.things[i];
 
 		if (thing->type == THING_P1_START)
 		{
@@ -113,20 +117,27 @@ void engine_init(wad* wad, const char* mapname)
 			if (info == NULL)
 				continue;
 
+			player_height = info->height;
+
 			cam = (camera){
-				.position = {thing->position.x, info->height, -thing->position.y},
+				.position = {thing->position.x, player_height, -thing->position.y},
 				.yaw = thing->angle,
 				.pitch = 0.0f
 			};
 		}
 	}
 
-	generate_meshes(&map, &gl_map);
+	generate_meshes(&m, &gl_m);
 }
 
 void engine_update(float dt)
 {
-	camera_update_direction_vertors(&cam);
+	camera_update_direction_vectors(&cam);
+
+	vec2 position = { cam.position.x, -cam.position.z };
+	sector* sector = map_get_sector(&m, &gl_m, position);
+	if (sector)
+		cam.position.y = sector->floor + player_height;
 
 	float speed = (is_button_pressed(KEY_LSHIFT) ? PLAYER_SPEED * 1.7f : PLAYER_SPEED) * dt;
 
@@ -199,7 +210,42 @@ void engine_render()
 	}
 }
 
-static void generate_meshes(const map* map, const gl_map* gl_map)
+sector* map_get_sector(map* map, gl_map* gl_map, vec2 position)
+{
+	uint16_t id = gl_map->num_nodes - 1;
+	while ((id & 0x8000) == 0)
+	{
+		if (id > gl_map->num_nodes)
+			return NULL;
+
+		gl_node* node = &gl_map->nodes[id];
+
+		vec2 delta = vec2_sub(position, node->partition);
+		bool is_on_back = (delta.x * node->delta_partition.y - delta.y * node->delta_partition.x) <= 0.f;
+
+		if (is_on_back)
+			id = gl_map->nodes[id].back_child_id;
+		else
+			id = gl_map->nodes[id].front_child_id;
+	}
+
+	if ((id & 0x7fff) >= gl_map->num_subsectors)
+		return NULL;
+
+	gl_subsector* subsector = &gl_map->subsectors[id & 0x7fff];
+	gl_segment* segment = &gl_map->segments[subsector->first_seg];
+	linedef* linedef = &map->linedefs[segment->linedef];
+
+	sidedef* sidedef;
+	if (segment->side == 0)
+		sidedef = &map->sidedefs[linedef->front_sidedef];
+	else
+		sidedef = &map->sidedefs[linedef->back_sidedef];
+
+	return &map->sectors[sidedef->sector_index];
+}
+
+void generate_meshes(const map* map, const gl_map* gl_map)
 {
 	draw_node** draw_node_ptr = &d_list;
 	for (int i = 0; i < gl_map->num_subsectors; i++)

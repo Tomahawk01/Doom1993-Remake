@@ -2,6 +2,16 @@
 
 #include <math.h>
 
+vec2 vec2_add(vec2 a, vec2 b)
+{
+	return (vec2) { a.x + b.x, a.y + b.y };
+}
+
+vec2 vec2_sub(vec2 a, vec2 b)
+{
+	return (vec2) { a.x - b.x, a.y - b.y };
+}
+
 vec3 vec3_add(vec3 a, vec3 b)
 {
 	return (vec3) { a.x + b.x, a.y + b.y, a.z + b.z };

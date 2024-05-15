@@ -35,3 +35,8 @@ int wad_read_playpal(palette* pal, const wad* wad);
 flat_tex* wad_read_flats(size_t* num, const wad* wad);
 patch* wad_read_patches(size_t* num, const wad* wad);
 wall_tex* wad_read_textures(size_t* num, const char* lumpname, const wad* wad);
+
+void wad_free_map(map* map);
+void wad_free_gl_map(gl_map* map);
+void wad_free_patches(patch* patches, size_t num);
+void wad_free_wall_textures(wall_tex* textures, size_t num);

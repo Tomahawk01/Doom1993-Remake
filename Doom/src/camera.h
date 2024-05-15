@@ -14,4 +14,4 @@ typedef struct camera
 	vec3 up;
 } camera;
 
-void camera_update_direction_vertors(camera* c);
+void camera_update_direction_vectors(camera* c);

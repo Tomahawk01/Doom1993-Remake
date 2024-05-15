@@ -38,6 +38,9 @@ typedef union vec4
 	float v[4];
 } vec4;
 
+vec2 vec2_add(vec2 a, vec2 b);
+vec2 vec2_sub(vec2 a, vec2 b);
+
 vec3 vec3_add(vec3 a, vec3 b);
 vec3 vec3_sub(vec3 a, vec3 b);
 vec3 vec3_scale(vec3 v, float s);

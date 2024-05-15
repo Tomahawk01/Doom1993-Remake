@@ -2,7 +2,7 @@
 
 #include <math.h>
 
-void camera_update_direction_vertors(camera* c)
+void camera_update_direction_vectors(camera* c)
 {
 	c->forward = (vec3){
 		cosf(c->yaw) * cosf(c->pitch),

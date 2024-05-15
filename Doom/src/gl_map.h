@@ -20,6 +20,14 @@ typedef struct gl_segment
 	uint16_t side;
 } gl_segment;
 
+typedef struct gl_node
+{
+	uint16_t front_child_id;
+	uint16_t back_child_id;
+	vec2 partition;
+	vec2 delta_partition;
+} gl_node;
+
 typedef struct gl_map
 {
 	size_t num_vertices;
@@ -32,4 +40,7 @@ typedef struct gl_map
 
 	size_t num_subsectors;
 	gl_subsector* subsectors;
+
+	size_t num_nodes;
+	gl_node* nodes;
 } gl_map;
