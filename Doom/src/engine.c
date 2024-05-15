@@ -4,6 +4,7 @@
 #include "input.h"
 #include "map.h"
 #include "palette.h"
+#include "darray.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -248,18 +249,19 @@ sector* map_get_sector(map* map, gl_map* gl_map, vec2 position)
 void generate_meshes(const map* map, const gl_map* gl_map)
 {
 	draw_node** draw_node_ptr = &d_list;
+
+	draw_node* flats_node = malloc(sizeof(draw_node));
+	flats_node->next = NULL;
+	flats_node->texture = -1;
+
+	vertexarray vertices;
+	indexarray indices;
+	darray_init(vertices, 0);
+	darray_init(indices, 0);
+
+	int start_idx = 0;
 	for (int i = 0; i < gl_map->num_subsectors; i++)
 	{
-		draw_node* floor_node = malloc(sizeof(draw_node));
-		floor_node->next = NULL;
-		*draw_node_ptr = floor_node;
-		draw_node_ptr = &floor_node->next;
-
-		draw_node* ceil_node = malloc(sizeof(draw_node));
-		ceil_node->next = NULL;
-		*draw_node_ptr = ceil_node;
-		draw_node_ptr = &ceil_node->next;
-
 		sector* sector = NULL;
 		gl_subsector* subsector = &gl_map->subsectors[i];
 		size_t n_vertices = subsector->num_segs;
@@ -312,27 +314,38 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 			floor_vertices[i].light = ceil_vertices[i].light = sector->light_level / 256.0f;
 		}
 
-		// Triangulate will form (n - 2) triangles so 3 * (n - 2) indices are required
-		size_t n_indices = 3 * (n_vertices - 2);
-		uint32_t* indices = malloc(sizeof(uint32_t) * n_indices);
-		for (int j = 0, k = 1; j < n_indices; j += 3, k++)
+		for (int i = 0; i < n_vertices; i++)
+			darray_push(vertices, floor_vertices[i]);
+
+		int ceil_start_idx = vertices.count;
+		for (int i = 0; i < n_vertices; i++)
+			darray_push(vertices, ceil_vertices[i]);
+
+		// Triangulation will form (n - 2) triangles so 2 * 3 * (n - 3) indices are required
+		for (int j = 0, k = 1; j < n_vertices - 2; j++, k++)
 		{
-			indices[j] = 0;
-			indices[j + 1] = k;
-			indices[j + 2] = k + 1;
+			darray_push(indices, start_idx);
+			darray_push(indices, start_idx + k);
+			darray_push(indices, start_idx + k + 1);
+
+			darray_push(indices, ceil_start_idx);
+			darray_push(indices, ceil_start_idx + k);
+			darray_push(indices, ceil_start_idx + k + 1);
 		}
 
-		floor_node->texture = ceil_node->texture = -1;
-		floor_node->sector = ceil_node->sector = sector;
-		mesh_create(&floor_node->mesh, n_vertices, floor_vertices, n_indices, indices);
-		mesh_create(&ceil_node->mesh, n_vertices, ceil_vertices, n_indices, indices);
-
+		start_idx = vertices.count;
 		free(floor_vertices);
 		free(ceil_vertices);
-		free(indices);
 	}
 
-	uint32_t indices[] = {
+	mesh_create(&flats_node->mesh, vertices.count, vertices.data, indices.count, indices.data);
+	*draw_node_ptr = flats_node;
+	draw_node_ptr = &flats_node->next;
+
+	darray_free(vertices);
+	darray_free(indices);
+
+	uint32_t quad_indices[] = {
 		0, 1, 3,	// 1st triangle
 		1, 2, 3		// 2nd triangle
 	};
@@ -386,7 +399,7 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 					{p3, {tx0, ty1}, 0, 2, front_sect->light_level / 256.0f}
 				};
 
-				mesh_create(&floor_node->mesh, 4, vertices, 6, indices);
+				mesh_create(&floor_node->mesh, 4, vertices, 6, quad_indices);
 				floor_node->sector = front_sect;
 				if (sidedef->lower >= 0)
 					floor_node->texture = wall_textures[sidedef->lower];
@@ -433,7 +446,7 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 					{p3, {tx0, ty1}, 0, 2, front_sect->light_level / 256.0f}
 				};
 
-				mesh_create(&ceil_node->mesh, 4, vertices, 6, indices);
+				mesh_create(&ceil_node->mesh, 4, vertices, 6, quad_indices);
 				ceil_node->sector = front_sect;
 				if (sidedef->upper >= 0)
 					ceil_node->texture = wall_textures[sidedef->upper];
@@ -483,7 +496,7 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 				{p3, {tx0, ty1}, 0, 2, sect->light_level / 256.0f}
 			};
 
-			mesh_create(&node->mesh, 4, vertices, 6, indices);
+			mesh_create(&node->mesh, 4, vertices, 6, quad_indices);
 			node->texture = wall_textures[side->middle];
 			node->sector = sect;
 
