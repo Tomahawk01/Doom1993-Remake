@@ -46,16 +46,17 @@ const char* fragSrc =
 	"out vec4 fragColor;\n"
 	"uniform usampler2DArray u_flat_tex;\n"
 	"uniform usampler2DArray u_wall_tex;\n"
-	"uniform sampler1D u_palette;\n"
+	"uniform sampler1DArray u_palettes;\n"
+	"uniform int u_palette_index;\n"
 	"void main() {\n"
 	"  vec3 color;\n"
 	"  if (TexIndex == -1) { discard; }\n"
 	"  else if (TexType == 0) {\n"
-	"    color = vec3(texelFetch(u_palette, TexIndex, 0));\n"
+	"    color = vec3(texelFetch(u_palettes, ivec2(TexIndex, u_palette_index), 0));\n"
 	"  } else if (TexType == 1) {\n"
-	"    color = vec3(texelFetch(u_palette, int(texture(u_flat_tex, vec3(TexCoords, TexIndex)).r), 0));\n"
+	"    color = vec3(texelFetch(u_palettes, ivec2(int(texture(u_flat_tex, vec3(TexCoords, TexIndex)).r), u_palette_index), 0));\n"
 	"  } else if (TexType == 2) {\n"
-	"    color = vec3(texelFetch(u_palette, int(texture(u_wall_tex, vec3(fract(TexCoords / MaxTexCoords) * MaxTexCoords, TexIndex)).r), 0));\n"
+	"    color = vec3(texelFetch(u_palettes, ivec2(int(texture(u_wall_tex, vec3(fract(TexCoords / MaxTexCoords) * MaxTexCoords, TexIndex)).r), u_palette_index), 0));\n"
 	"  }\n"
 	"  fragColor = vec4(color * Light, 1.0);\n"
 	"}\n";
@@ -67,7 +68,7 @@ static GLuint program;
 static GLuint model_location;
 static GLuint view_location;
 static GLuint projection_location;
-static GLuint color_location;
+static GLuint palette_index_location;
 
 void renderer_init(int w, int h)
 {
@@ -90,7 +91,12 @@ void renderer_clear()
 void renderer_set_palette_texture(GLuint palette_texture)
 {
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_1D, palette_texture);
+	glBindTexture(GL_TEXTURE_1D_ARRAY, palette_texture);
+}
+
+void renderer_set_palette_index(int index)
+{
+	glUniform1i(palette_index_location, index);
 }
 
 void renderer_set_wall_texture(GLuint texture)
@@ -140,9 +146,9 @@ static void init_shader()
 	projection_location = glGetUniformLocation(program, "u_projection");
 	model_location = glGetUniformLocation(program, "u_model");
 	view_location = glGetUniformLocation(program, "u_view");
-	color_location = glGetUniformLocation(program, "u_color");
+	palette_index_location = glGetUniformLocation(program, "u_palette_index");
 
-	GLuint palette_location = glGetUniformLocation(program, "u_palette");
+	GLuint palette_location = glGetUniformLocation(program, "u_palettes");
 	glUniform1i(palette_location, 0);
 
 	GLuint texture_array_location = glGetUniformLocation(program, "u_flat_tex");

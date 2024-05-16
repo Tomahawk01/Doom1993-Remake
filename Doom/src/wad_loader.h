@@ -31,7 +31,7 @@ int wad_read_map(const char* mapname, map* map, const wad* wad, const wall_tex* 
 int wad_read_gl_map(const char* gl_mapname, gl_map* map, const wad* wad);
 
 int wad_read_patch(patch* patch, const char* patch_name, const wad* wad);
-int wad_read_playpal(palette* pal, const wad* wad);
+palette* wad_read_playpal(size_t* num, const wad* wad);
 flat_tex* wad_read_flats(size_t* num, const wad* wad);
 patch* wad_read_patches(size_t* num, const wad* wad);
 wall_tex* wad_read_textures(size_t* num, const char* lumpname, const wad* wad);

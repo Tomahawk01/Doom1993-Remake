@@ -1,5 +1,7 @@
 #include "input.h"
 
+#include <string.h>
+
 const int key_mapping[GLFW_KEY_LAST + 1] = {
     [GLFW_KEY_SPACE] = KEY_SPACE,
     [GLFW_KEY_APOSTROPHE] = KEY_APOSTROPHE,
@@ -72,6 +74,7 @@ const int mouse_mapping[GLFW_MOUSE_BUTTON_LAST + 1] = {
 static GLFWwindow* window;
 static vec2 mouse_pos;
 static int buttons[BUTTON_COUNT];
+static int previous_buttons[BUTTON_COUNT];
 
 int is_button_pressed(button btn)
 {
@@ -79,6 +82,14 @@ int is_button_pressed(button btn)
 		return buttons[btn];
 
 	return 0;
+}
+
+int is_button_just_pressed(button btn)
+{
+    if (btn >= 0 && btn < BUTTON_COUNT)
+        return buttons[btn] && !previous_buttons[btn];
+
+    return 0;
 }
 
 vec2 get_mouse_position()
@@ -99,6 +110,11 @@ void set_mouse_captured(int is_captured)
 void input_init(GLFWwindow* w)
 {
 	window = w;
+}
+
+void input_tick()
+{
+    memcpy(previous_buttons, buttons, BUTTON_COUNT * sizeof(int));
 }
 
 void input_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)

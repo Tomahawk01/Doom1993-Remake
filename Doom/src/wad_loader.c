@@ -85,14 +85,20 @@ int wad_find_lump(const char* lumpname, const wad* wad)
 	return -1;
 }
 
-int wad_read_playpal(palette* pal, const wad* wad)
+palette* wad_read_playpal(size_t* num, const wad* wad)
 {
 	int playpal_index = wad_find_lump("PLAYPAL", wad);
 	if (playpal_index < 0)
-		return 1;
+		return NULL;
 
-	memcpy(pal->colors, wad->lumps[playpal_index].data, NUM_COLORS * 3);
-	return 0;
+	size_t palette_size = NUM_COLORS * 3;
+	*num = wad->lumps[playpal_index].size / palette_size;
+
+	palette* palettes = malloc(sizeof(palette) * *num);
+	for (int i = 0; i < *num; i++)
+		memcpy(palettes[i].colors, wad->lumps[playpal_index].data + i * palette_size, palette_size);
+
+	return palettes;
 }
 
 flat_tex* wad_read_flats(size_t* num, const wad* wad)

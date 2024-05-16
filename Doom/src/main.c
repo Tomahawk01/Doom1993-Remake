@@ -73,11 +73,12 @@ int main(int argc, char** argv)
 		float delta = now - last;
 		last = now;
 
-		engine_update(delta);
-
+		input_tick();
 		glfwPollEvents();
 		snprintf(title, 128, "Doom1993-Remake | %.0f fps", 1.0f / delta);
 		glfwSetWindowTitle(window, title);
+
+		engine_update(delta);
 
 		renderer_clear();
 		engine_render();

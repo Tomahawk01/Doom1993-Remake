@@ -36,21 +36,19 @@ typedef struct wall_tex_info
 static void generate_meshes(const map* map, const gl_map* gl_map);
 static sector* map_get_sector(map* map, gl_map* gl_map, vec2 position);
 
-static palette pal;
-static wall_tex_info* wall_textures_info;
 static size_t num_flats;
 static size_t num_wall_textures;
-static int sky_flat;
-static GLuint flat_texture_array;
-static GLuint wall_texture_array;
+static size_t num_palettes;
+static wall_tex_info* wall_textures_info;
 static vec2* wall_max_coords;
 
 static camera cam;
 static vec2 last_mouse_pos;
 
-static float player_height;
 static map m;
 static gl_map gl_m;
+static float player_height;
+static int sky_flat;
 
 static draw_list* d_list;
 
@@ -73,14 +71,13 @@ void engine_init(wad* wad, const char* mapname)
 		return;
 	}
 
-	wad_read_playpal(&pal, wad);
-	GLuint palette_texture = palette_generate_texture(&pal);
-	renderer_set_palette_texture(palette_texture);
+	palette* palettes = wad_read_playpal(&num_palettes, wad);
+	GLuint palette_texture = palettes_generate_texture(palettes, num_palettes);
 
 	sky_flat = wad_find_lump("F_SKY1", wad) - wad_find_lump("F_START", wad) - 1;
 
 	flat_tex* flats = wad_read_flats(&num_flats, wad);
-	flat_texture_array = generate_flat_texture_array(flats, num_flats);
+	GLuint flat_texture_array = generate_flat_texture_array(flats, num_flats);
 	free(flats);
 
 	wall_tex* textures = wad_read_textures(&num_wall_textures, "TEXTURE1", wad);
@@ -89,7 +86,7 @@ void engine_init(wad* wad, const char* mapname)
 	for (int i = 0; i < num_wall_textures; i++)
 		wall_textures_info[i] = (wall_tex_info){ textures[i].width, textures[i].height };
 
-	wall_texture_array = generate_wall_texture_array(textures, num_wall_textures, wall_max_coords);
+	GLuint wall_texture_array = generate_wall_texture_array(textures, num_wall_textures, wall_max_coords);
 	wad_free_wall_textures(textures, num_wall_textures);
 
 	if (wad_read_map(mapname, &m, wad, textures, num_wall_textures) != 0)
@@ -132,10 +129,19 @@ void engine_init(wad* wad, const char* mapname)
 
 	renderer_set_flat_texture(flat_texture_array);
 	renderer_set_wall_texture(wall_texture_array);
+	renderer_set_palette_texture(palette_texture);
 }
 
+static int palette_index = 0;
 void engine_update(float dt)
 {
+	if (is_button_just_pressed(KEY_MINUS))
+		palette_index--;
+	if (is_button_just_pressed(KEY_EQUAL))
+		palette_index++;
+
+	palette_index = min(max(palette_index, 0), num_palettes - 1);
+
 	camera_update_direction_vectors(&cam);
 
 	vec2 position = { cam.position.x, -cam.position.z };
@@ -204,6 +210,7 @@ void engine_render()
 	mat4 view = mat4_look_at(cam.position, vec3_add(cam.position, cam.forward), cam.up);
 	renderer_set_view(view);
 
+	renderer_set_palette_index(palette_index);
 	for (draw_node* node = d_list; node != NULL; node = node->next)
 		renderer_draw_mesh(&node->mesh, mat4_identity());
 }
