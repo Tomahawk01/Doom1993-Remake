@@ -120,19 +120,20 @@ flat_tex* wad_read_flats(size_t* num, const wad* wad)
 	return flats;
 }
 
-int wad_read_patch(patch* patch, const char* patch_name, const wad* wad)
+int wad_read_patch(patch* p, const char* patch_name, const wad* wad)
 {
+	*p = (patch){ 0 };
 	int patch_lump_idx = wad_find_lump(patch_name, wad);
 	if (patch_lump_idx < 0)
 		return 1;
 	lump* patch_lump = &wad->lumps[patch_lump_idx];
 
-	patch->width = READ_I16(patch_lump->data, 0);
-	patch->height = READ_I16(patch_lump->data, 2);
-	patch->data = malloc(patch->width * patch->height);
-	memset(patch->data, 247, patch->width * patch->height);
+	p->width = READ_I16(patch_lump->data, 0);
+	p->height = READ_I16(patch_lump->data, 2);
+	p->data = malloc(p->width * p->height);
+	memset(p->data, 247, p->width * p->height);
 
-	for (int16_t x = 0; x < patch->width; x++)
+	for (int16_t x = 0; x < p->width; x++)
 	{
 		uint32_t column_offset = READ_I32(patch_lump->data, 8 + x * 4);
 		uint8_t  post_topdelta = 0;
@@ -149,7 +150,7 @@ int wad_read_patch(patch* patch, const char* patch_name, const wad* wad)
 				int data_byte = patch_lump->data[column_offset++];
 				int tex_x = x;
 				int tex_y = y + post_topdelta;
-				patch->data[tex_y * patch->width + tex_x] = data_byte;
+				p->data[tex_y * p->width + tex_x] = data_byte;
 			}
 			column_offset++; // dummy value
 		}

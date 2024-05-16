@@ -2,6 +2,7 @@
 #include "glad/glad.h"
 
 #include <stddef.h>
+#include <stdint.h>
 
 GLuint compile_shader(GLenum type, const char* src);
 GLuint link_shader(size_t num_shaders, ...);

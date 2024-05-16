@@ -45,9 +45,9 @@ int main(int argc, char** argv)
 	}
 
 	printf("OpenGL Info:\n");
-	printf("	Vendor: %s\n", glGetString(GL_VENDOR));
-	printf("	Renderer: %s\n", glGetString(GL_RENDERER));
-	printf("	Version: %s\n", glGetString(GL_VERSION));
+	printf("\tVendor: %s\n", glGetString(GL_VENDOR));
+	printf("\tRenderer: %s\n", glGetString(GL_RENDERER));
+	printf("\tVersion: %s\n", glGetString(GL_VERSION));
 
 	// Input handling
 	input_init(window);

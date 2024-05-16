@@ -42,7 +42,8 @@ static size_t num_flats;
 static size_t num_wall_textures;
 static int sky_flat;
 static GLuint flat_texture_array;
-static GLuint* wall_textures;
+static GLuint wall_texture_array;
+static vec2* wall_max_coords;
 
 static camera cam;
 static vec2 last_mouse_pos;
@@ -83,13 +84,12 @@ void engine_init(wad* wad, const char* mapname)
 	free(flats);
 
 	wall_tex* textures = wad_read_textures(&num_wall_textures, "TEXTURE1", wad);
-	wall_textures = malloc(sizeof(GLuint) * num_wall_textures);
 	wall_textures_info = malloc(sizeof(wall_tex_info) * num_wall_textures);
+	wall_max_coords = malloc(sizeof(vec2) * num_wall_textures);
 	for (int i = 0; i < num_wall_textures; i++)
-	{
-		wall_textures[i] = generate_texture(textures[i].width, textures[i].height, textures[i].data);
 		wall_textures_info[i] = (wall_tex_info){ textures[i].width, textures[i].height };
-	}
+
+	wall_texture_array = generate_wall_texture_array(textures, num_wall_textures, wall_max_coords);
 	wad_free_wall_textures(textures, num_wall_textures);
 
 	if (wad_read_map(mapname, &m, wad, textures, num_wall_textures) != 0)
@@ -129,6 +129,9 @@ void engine_init(wad* wad, const char* mapname)
 	}
 
 	generate_meshes(&m, &gl_m);
+
+	renderer_set_flat_texture(flat_texture_array);
+	renderer_set_wall_texture(wall_texture_array);
 }
 
 void engine_update(float dt)
@@ -201,14 +204,8 @@ void engine_render()
 	mat4 view = mat4_look_at(cam.position, vec3_add(cam.position, cam.forward), cam.up);
 	renderer_set_view(view);
 
-	renderer_set_draw_texture_array(flat_texture_array);
 	for (draw_node* node = d_list; node != NULL; node = node->next)
-	{
-		if (node->texture != -1)
-			renderer_set_draw_texture(node->texture);
-
 		renderer_draw_mesh(&node->mesh, mat4_identity());
-	}
 }
 
 sector* map_get_sector(map* map, gl_map* gl_map, vec2 position)
@@ -222,7 +219,7 @@ sector* map_get_sector(map* map, gl_map* gl_map, vec2 position)
 		gl_node* node = &gl_map->nodes[id];
 
 		vec2 delta = vec2_sub(position, node->partition);
-		bool is_on_back = (delta.x * node->delta_partition.y - delta.y * node->delta_partition.x) <= 0.f;
+		bool is_on_back = (delta.x * node->delta_partition.y - delta.y * node->delta_partition.x) <= 0.0f;
 
 		if (is_on_back)
 			id = gl_map->nodes[id].back_child_id;
@@ -303,7 +300,8 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 
 		for (int i = 0; i < n_vertices; i++)
 		{
-			int floor_tex = sector->floor_tex, ceil_tex = sector->ceiling_tex;
+			int floor_tex = sector->floor_tex;
+			int ceil_tex = sector->ceiling_tex;
 
 			floor_vertices[i].position.y = sector->floor;
 			floor_vertices[i].texture_index = floor_tex >= 0 && floor_tex < num_flats ? floor_tex : -1;
@@ -356,15 +354,15 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 
 		if (ld->flags & LINEDEF_FLAGS_TWO_SIDED)
 		{
-			// Floor
 			draw_node* floor_node = malloc(sizeof(draw_node));
 			floor_node->next = NULL;
 
 			vec2 start = map->vertices[ld->start_index];
-			vec2 end = map->vertices[ld->end_index];
+			vec2 end = map->vertices[ld->start_index];
 
 			sidedef* front_side = &map->sidedefs[ld->front_sidedef];
 			sector* front_sect = &map->sectors[front_side->sector_index];
+
 			sidedef* back_side = &map->sidedefs[ld->back_sidedef];
 			sector* back_sect = &map->sectors[back_side->sector_index];
 
@@ -376,8 +374,10 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 				vec3 p2 = { end.x, back_sect->floor, -end.y };
 				vec3 p3 = { start.x, back_sect->floor, -start.y };
 
-				const float x = p1.x - p0.x, y = p1.z - p0.z;
-				const float width = sqrtf(x * x + y * y), height = fabsf(p3.y - p0.y);
+				const float x = p1.x - p0.x;
+				const float y = p1.z - p0.z;
+				const float width = sqrtf(x * x + y * y);
+				const float height = fabsf(p3.y - p0.y);
 
 				float tw = wall_textures_info[sidedef->lower].width;
 				float th = wall_textures_info[sidedef->lower].height;
@@ -389,20 +389,25 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 				if (ld->flags & LINEDEF_FLAGS_LOWER_UNPEGGED)
 					y_off += (front_sect->ceiling - back_sect->floor) / th;
 
-				float tx0 = x_off, ty0 = y_off + h;
-				float tx1 = x_off + w, ty1 = y_off;
+				float tx0 = x_off;
+				float ty0 = y_off + h;
+				float tx1 = x_off + w;
+				float ty1 = y_off;
 
+				vec2 max_coords = wall_max_coords[sidedef->lower];
+				tx0 *= max_coords.x, tx1 *= max_coords.x;
+				ty0 *= max_coords.y, ty1 *= max_coords.y;
+
+				float light = front_sect->light_level / 256.0f;
 				vertex vertices[] = {
-					{p0, {tx0, ty0}, 0, 2, front_sect->light_level / 256.0f},
-					{p1, {tx1, ty0}, 0, 2, front_sect->light_level / 256.0f},
-					{p2, {tx1, ty1}, 0, 2, front_sect->light_level / 256.0f},
-					{p3, {tx0, ty1}, 0, 2, front_sect->light_level / 256.0f}
+					{p0, {tx0, ty0}, sidedef->lower, 2, light, max_coords},
+					{p1, {tx1, ty0}, sidedef->lower, 2, light, max_coords},
+					{p2, {tx1, ty1}, sidedef->lower, 2, light, max_coords},
+					{p3, {tx0, ty1}, sidedef->lower, 2, light, max_coords}
 				};
 
 				mesh_create(&floor_node->mesh, 4, vertices, 6, quad_indices);
 				floor_node->sector = front_sect;
-				if (sidedef->lower >= 0)
-					floor_node->texture = wall_textures[sidedef->lower];
 			}
 
 			*draw_node_ptr = floor_node;
@@ -429,8 +434,10 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 				float tw = wall_textures_info[sidedef->upper].width;
 				float th = wall_textures_info[sidedef->upper].height;
 
-				float w = width / tw, h = height / th;
-				float x_off = sidedef->x_off / tw, y_off = sidedef->y_off / th;
+				float w = width / tw;
+				float h = height / th;
+				float x_off = sidedef->x_off / tw;
+				float y_off = sidedef->y_off / th;
 				if (ld->flags & LINEDEF_FLAGS_UPPER_UNPEGGED)
 					y_off -= h;
 
@@ -439,17 +446,20 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 				float tx1 = x_off + w;
 				float ty1 = y_off;
 
+				vec2 max_coords = wall_max_coords[sidedef->upper];
+				tx0 *= max_coords.x, tx1 *= max_coords.x;
+				ty0 *= max_coords.y, ty1 *= max_coords.y;
+
+				float light = front_sect->light_level / 256.0f;
 				vertex vertices[] = {
-					{p0, {tx0, ty0}, 0, 2, front_sect->light_level / 256.0f},
-					{p1, {tx1, ty0}, 0, 2, front_sect->light_level / 256.0f},
-					{p2, {tx1, ty1}, 0, 2, front_sect->light_level / 256.0f},
-					{p3, {tx0, ty1}, 0, 2, front_sect->light_level / 256.0f}
+					{p0, {tx0, ty0}, sidedef->upper, 2, light, max_coords},
+					{p1, {tx1, ty0}, sidedef->upper, 2, light, max_coords},
+					{p2, {tx1, ty1}, sidedef->upper, 2, light, max_coords},
+					{p3, {tx0, ty1}, sidedef->upper, 2, light, max_coords}
 				};
 
 				mesh_create(&ceil_node->mesh, 4, vertices, 6, quad_indices);
 				ceil_node->sector = front_sect;
-				if (sidedef->upper >= 0)
-					ceil_node->texture = wall_textures[sidedef->upper];
 			}
 
 			*draw_node_ptr = ceil_node;
@@ -471,7 +481,8 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 			vec3 p2 = { end.x, sect->ceiling, -end.y };
 			vec3 p3 = { start.x, sect->ceiling, -start.y };
 
-			const float x = p1.x - p0.x, y = p1.z - p0.z;
+			const float x = p1.x - p0.x;
+			const float y = p1.z - p0.z;
 			const float width = sqrtf(x * x + y * y);
 			const float height = p3.y - p0.y;
 
@@ -486,18 +497,24 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 			if (ld->flags & LINEDEF_FLAGS_LOWER_UNPEGGED)
 				y_off -= h;
 
-			float tx0 = x_off, ty0 = y_off + h;
-			float tx1 = x_off + w, ty1 = y_off;
+			float tx0 = x_off;
+			float ty0 = y_off + h;
+			float tx1 = x_off + w;
+			float ty1 = y_off;
 
+			vec2 max_coords = wall_max_coords[side->middle];
+			tx0 *= max_coords.x, tx1 *= max_coords.x;
+			ty0 *= max_coords.y, ty1 *= max_coords.y;
+
+			float light = sect->light_level / 256.0f;
 			vertex vertices[] = {
-				{p0, {tx0, ty0}, 0, 2, sect->light_level / 256.0f},
-				{p1, {tx1, ty0}, 0, 2, sect->light_level / 256.0f},
-				{p2, {tx1, ty1}, 0, 2, sect->light_level / 256.0f},
-				{p3, {tx0, ty1}, 0, 2, sect->light_level / 256.0f}
+				{p0, {tx0, ty0}, side->middle, 2, light, max_coords},
+				{p1, {tx1, ty0}, side->middle, 2, light, max_coords},
+				{p2, {tx1, ty1}, side->middle, 2, light, max_coords},
+				{p3, {tx0, ty1}, side->middle, 2, light, max_coords}
 			};
 
 			mesh_create(&node->mesh, 4, vertices, 6, quad_indices);
-			node->texture = wall_textures[side->middle];
 			node->sector = sect;
 
 			*draw_node_ptr = node;

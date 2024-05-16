@@ -19,6 +19,7 @@ typedef struct vertex
 	int texture_index;
 	int texture_type;
 	float light;
+	vec2 max_coords;
 } vertex;
 
 void mesh_create(mesh* mesh, size_t num_vertices, vertex* vertices, size_t num_indices, uint32_t* indices);
