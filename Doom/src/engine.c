@@ -358,7 +358,7 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 			floor_node->next = NULL;
 
 			vec2 start = map->vertices[ld->start_index];
-			vec2 end = map->vertices[ld->start_index];
+			vec2 end = map->vertices[ld->end_index];
 
 			sidedef* front_side = &map->sidedefs[ld->front_sidedef];
 			sector* front_sect = &map->sectors[front_side->sector_index];
@@ -427,7 +427,7 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 				vec3 p3 = { start.x, back_sect->ceiling, -start.y };
 
 				const float x = p1.x - p0.x;
-				float y = p1.z - p0.z;
+				const float y = p1.z - p0.z;
 				const float width = sqrtf(x * x + y * y);
 				const float height = -fabsf(p3.y - p0.y);
 

@@ -30,7 +30,7 @@ int wad_load_from_file(const char* filename, wad* wad)
 	fread(buffer, size, 1, filePath);
 	fclose(filePath);
 
-	// Read data
+	// Read header
 	if (size < 12)
 		return 3;
 	wad->id = malloc(5);
@@ -369,6 +369,22 @@ void read_gl_subsectors(gl_map* map, const lump* lump)
 	}
 }
 
+void read_gl_nodes(gl_map* map, const lump* lump)
+{
+	map->num_nodes = lump->size / 28; // each node is 28 bytes
+	map->nodes = malloc(sizeof(gl_node) * map->num_nodes);
+
+	for (int i = 0, j = 0; i < lump->size; i += 28, j++)
+	{
+		map->nodes[j].partition.x = (int16_t)READ_I16(lump->data, i);
+		map->nodes[j].partition.y = (int16_t)READ_I16(lump->data, i + 2);
+		map->nodes[j].delta_partition.x = (int16_t)READ_I16(lump->data, i + 4);
+		map->nodes[j].delta_partition.y = (int16_t)READ_I16(lump->data, i + 6);
+		map->nodes[j].front_child_id = READ_I16(lump->data, i + 24);
+		map->nodes[j].back_child_id = READ_I16(lump->data, i + 26);
+	}
+}
+
 void read_vertices(map* map, const lump* lump)
 {
 	map->num_vertices = lump->size / 4;  // Each vertex is 4 bytes
@@ -492,21 +508,5 @@ void read_things(map* map, const lump* lump)
 
 		float angle = (int16_t)READ_I16(lump->data, i + 4);
 		map->things[j].angle = angle * M_PI / 180.f + M_PI;
-	}
-}
-
-void read_gl_nodes(gl_map* map, const lump* lump)
-{
-	map->num_nodes = lump->size / 28; // each node is 28 bytes
-	map->nodes = malloc(sizeof(gl_node) * map->num_nodes);
-
-	for (int i = 0, j = 0; i < lump->size; i += 28, j++)
-	{
-		map->nodes[j].partition.x = (int16_t)READ_I16(lump->data, i);
-		map->nodes[j].partition.y = (int16_t)READ_I16(lump->data, i + 2);
-		map->nodes[j].delta_partition.x = (int16_t)READ_I16(lump->data, i + 4);
-		map->nodes[j].delta_partition.y = (int16_t)READ_I16(lump->data, i + 6);
-		map->nodes[j].front_child_id = READ_I16(lump->data, i + 24);
-		map->nodes[j].back_child_id = READ_I16(lump->data, i + 26);
 	}
 }
