@@ -437,6 +437,7 @@ void read_sidedefs(map* map, const lump* lump, const wall_tex* tex, int num_tex)
 
 	for (int i = 0, j = 0; i < lump->size; i += 30, j++)
 	{
+		map->sidedefs[j].lower = map->sidedefs[j].upper = map->sidedefs[j].middle = -1;
 		for (int k = 0; k < num_tex; k++)
 		{
 			if (strncmp_nocase((char*)lump->data + i + 4, tex[k].name, 8) == 0)
