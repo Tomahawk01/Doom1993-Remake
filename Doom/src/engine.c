@@ -329,8 +329,8 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 		for (int j = 0, k = 1; j < n_vertices - 2; j++, k++)
 		{
 			darray_push(indices, start_idx);
-			darray_push(indices, start_idx + k);
 			darray_push(indices, start_idx + k + 1);
+			darray_push(indices, start_idx + k);
 
 			darray_push(indices, ceil_start_idx);
 			darray_push(indices, ceil_start_idx + k);
@@ -392,7 +392,7 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 
 		if (ld->flags & LINEDEF_FLAGS_TWO_SIDED)
 		{
-			if (sidedef->lower >= 0)
+			if (sidedef->lower >= 0 && front_sector->floor < back_sector->floor)
 			{
 				draw_node* floor_node = malloc(sizeof(draw_node));
 				floor_node->next = NULL;
@@ -439,15 +439,15 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 				draw_node_ptr = &floor_node->next;
 			}
 
-			if (sidedef->upper >= 0 && !(front_sector->ceiling_tex == sky_flat && back_sector->ceiling_tex == sky_flat))
+			if (sidedef->upper >= 0 && front_sector->ceiling > back_sector->ceiling && !(front_sector->ceiling_tex == sky_flat && back_sector->ceiling_tex == sky_flat))
 			{
 				draw_node* ceil_node = malloc(sizeof(draw_node));
 				ceil_node->next = NULL;
 
-				vec3 p0 = { start.x, front_sector->ceiling, -start.y };
-				vec3 p1 = { end.x, front_sector->ceiling, -end.y };
-				vec3 p2 = { end.x, back_sector->ceiling, -end.y };
-				vec3 p3 = { start.x, back_sector->ceiling, -start.y };
+				vec3 p0 = { start.x, back_sector->ceiling, -start.y };
+				vec3 p1 = { end.x, back_sector->ceiling, -end.y };
+				vec3 p2 = { end.x, front_sector->ceiling, -end.y };
+				vec3 p3 = { start.x, front_sector->ceiling, -start.y };
 
 				const float x = p1.x - p0.x;
 				const float y = p1.z - p0.z;
@@ -465,9 +465,9 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 					y_off -= h;
 
 				float tx0 = x_off;
-				float ty0 = y_off + h;
+				float ty0 = y_off;
 				float tx1 = x_off + w;
-				float ty1 = y_off;
+				float ty1 = y_off + h;
 
 				vec2 max_coords = wall_max_coords[sidedef->upper];
 				tx0 *= max_coords.x, tx1 *= max_coords.x;
