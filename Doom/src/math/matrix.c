@@ -83,26 +83,26 @@ mat4 mat4_rotate(vec3 axis, float angle)
 
 mat4 mat4_look_at(vec3 eye, vec3 target, vec3 up)
 {
-	vec3 forward = vec3_normalize(vec3_sub(target, eye));
-	vec3 right = vec3_normalize(vec3_cross(forward, up));
-	vec3 new_up = vec3_cross(right, forward);
+	vec3 zaxis = vec3_normalize(vec3_sub(target, eye));
+	vec3 xaxis = vec3_normalize(vec3_cross(up, zaxis));
+	vec3 yaxis = vec3_cross(zaxis, xaxis);
 
 	mat4 result = {
-		.a1 = right.x,
-		.a2 = new_up.x,
-		.a3 = -forward.x,
+		.a1 = xaxis.x,
+		.a2 = yaxis.x,
+		.a3 = -zaxis.x,
 		.a4 = 0.0f,
-		.b1 = right.y,
-		.b2 = new_up.y,
-		.b3 = -forward.y,
+		.b1 = xaxis.y,
+		.b2 = yaxis.y,
+		.b3 = -zaxis.y,
 		.b4 = 0.0f,
-		.c1 = right.z,
-		.c2 = new_up.z,
-		.c3 = -forward.z,
+		.c1 = xaxis.z,
+		.c2 = yaxis.z,
+		.c3 = -zaxis.z,
 		.c4 = 0.0f,
-		.d1 = -vec3_dot(right, eye),
-		.d2 = -vec3_dot(new_up, eye),
-		.d3 = vec3_dot(forward, eye),
+		.d1 = -vec3_dot(xaxis, eye),
+		.d2 = -vec3_dot(yaxis, eye),
+		.d3 = vec3_dot(zaxis, eye),
 		.d4 = 1.0f,
 	};
 

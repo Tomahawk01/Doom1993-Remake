@@ -386,6 +386,17 @@ void read_gl_nodes(gl_map* map, const lump* lump)
 		map->nodes[j].partition.y = (int16_t)READ_I16(lump->data, i + 2);
 		map->nodes[j].delta_partition.x = (int16_t)READ_I16(lump->data, i + 4);
 		map->nodes[j].delta_partition.y = (int16_t)READ_I16(lump->data, i + 6);
+		
+		map->nodes[j].front_bbox[0] = READ_I16(lump->data, i + 8);
+		map->nodes[j].front_bbox[1] = READ_I16(lump->data, i + 10);
+		map->nodes[j].front_bbox[2] = READ_I16(lump->data, i + 12);
+		map->nodes[j].front_bbox[3] = READ_I16(lump->data, i + 14);
+
+		map->nodes[j].back_bbox[0] = READ_I16(lump->data, i + 16);
+		map->nodes[j].back_bbox[1] = READ_I16(lump->data, i + 18);
+		map->nodes[j].back_bbox[2] = READ_I16(lump->data, i + 20);
+		map->nodes[j].back_bbox[3] = READ_I16(lump->data, i + 22);
+
 		map->nodes[j].front_child_id = READ_I16(lump->data, i + 24);
 		map->nodes[j].back_child_id = READ_I16(lump->data, i + 26);
 	}
@@ -514,6 +525,6 @@ void read_things(map* map, const lump* lump)
 		map->things[j].type = READ_I16(lump->data, i + 6);
 
 		float angle = (int16_t)READ_I16(lump->data, i + 4);
-		map->things[j].angle = angle * M_PI / 180.f + M_PI;
+		map->things[j].angle = angle * M_PI / 180.f;
 	}
 }

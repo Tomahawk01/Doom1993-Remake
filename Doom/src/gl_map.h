@@ -26,6 +26,8 @@ typedef struct gl_node
 	uint16_t back_child_id;
 	vec2 partition;
 	vec2 delta_partition;
+	int16_t front_bbox[4];
+	int16_t back_bbox[4];
 } gl_node;
 
 typedef struct gl_map

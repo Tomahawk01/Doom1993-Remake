@@ -119,7 +119,7 @@ void engine_init(wad* wad, const char* mapname)
 			player_height = info->height;
 
 			cam = (camera){
-				.position = {thing->position.x, player_height, -thing->position.y},
+				.position = {thing->position.x, player_height, thing->position.y},
 				.yaw = thing->angle,
 				.pitch = 0.0f
 			};
@@ -145,7 +145,7 @@ void engine_update(float dt)
 
 	camera_update_direction_vectors(&cam);
 
-	vec2 position = { cam.position.x, -cam.position.z };
+	vec2 position = { cam.position.x, cam.position.z };
 	sector* sector = map_get_sector(&m, &gl_m, position);
 	if (sector)
 		cam.position.y = sector->floor + player_height;
@@ -169,9 +169,9 @@ void engine_update(float dt)
 
 	float turn_speed = 4.0f * dt;
 	if (is_button_pressed(KEY_RIGHT))
-		cam.yaw += turn_speed;
-	if (is_button_pressed(KEY_LEFT))
 		cam.yaw -= turn_speed;
+	if (is_button_pressed(KEY_LEFT))
+		cam.yaw += turn_speed;
 
 	if (is_button_pressed(KEY_ESCAPE))
 		set_mouse_captured(0);
@@ -195,7 +195,7 @@ void engine_update(float dt)
 		float dy = last_mouse_pos.y - curr_mouse_pos.y;
 		last_mouse_pos = curr_mouse_pos;
 
-		cam.yaw += dx * MOUSE_SENSITIVITY;
+		cam.yaw -= dx * MOUSE_SENSITIVITY;
 		cam.pitch += dy * MOUSE_SENSITIVITY;
 		// Clamp the camera vertically
 		cam.pitch = max(-M_PI_2 + 0.05, min(M_PI_2 - 0.05, cam.pitch));
@@ -319,8 +319,8 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 			}
 
 			floor_vertices[j] = ceil_vertices[j] = (vertex){
-				.position = {start.x, 0.0f, -start.y},
-				.tex_coords = {start.x / FLAT_TEXTURE_SIZE, -start.y / FLAT_TEXTURE_SIZE},
+				.position = {start.x, 0.0f, start.y},
+				.tex_coords = {start.x / FLAT_TEXTURE_SIZE, start.y / FLAT_TEXTURE_SIZE},
 				.texture_type = 1
 			};
 
@@ -349,10 +349,10 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 			{
 				if (sidedef->lower >= 0 && front_sector->floor < back_sector->floor)
 				{
-					vec3 p0 = { start.x, front_sector->floor, -start.y };
-					vec3 p1 = { end.x, front_sector->floor, -end.y };
-					vec3 p2 = { end.x, back_sector->floor, -end.y };
-					vec3 p3 = { start.x, back_sector->floor, -start.y };
+					vec3 p0 = { start.x, front_sector->floor, start.y };
+					vec3 p1 = { end.x, front_sector->floor, end.y };
+					vec3 p2 = { end.x, back_sector->floor, end.y };
+					vec3 p3 = { start.x, back_sector->floor, start.y };
 
 					const float x = p1.x - p0.x;
 					const float y = p1.z - p0.z;
@@ -401,10 +401,10 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 
 				if (sidedef->upper >= 0 && front_sector->ceiling > back_sector->ceiling && !(front_sector->ceiling_tex == sky_flat && back_sector->ceiling_tex == sky_flat))
 				{
-					vec3 p0 = { start.x, back_sector->ceiling, -start.y };
-					vec3 p1 = { end.x, back_sector->ceiling, -end.y };
-					vec3 p2 = { end.x, front_sector->ceiling, -end.y };
-					vec3 p3 = { start.x, front_sector->ceiling, -start.y };
+					vec3 p0 = { start.x, back_sector->ceiling, start.y };
+					vec3 p1 = { end.x, back_sector->ceiling, end.y };
+					vec3 p2 = { end.x, front_sector->ceiling, end.y };
+					vec3 p3 = { start.x, front_sector->ceiling, start.y };
 
 					const float x = p1.x - p0.x;
 					const float y = p1.z - p0.z;
@@ -453,10 +453,10 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 			}
 			else
 			{
-				vec3 p0 = { start.x, sector->floor, -start.y };
-				vec3 p1 = { end.x, sector->floor, -end.y };
-				vec3 p2 = { end.x, sector->ceiling, -end.y };
-				vec3 p3 = { start.x, sector->ceiling, -start.y };
+				vec3 p0 = { start.x, sector->floor, start.y };
+				vec3 p1 = { end.x, sector->floor, end.y };
+				vec3 p2 = { end.x, sector->ceiling, end.y };
+				vec3 p3 = { start.x, sector->ceiling, start.y };
 
 				const float x = p1.x - p0.x;
 				const float y = p1.z - p0.z;

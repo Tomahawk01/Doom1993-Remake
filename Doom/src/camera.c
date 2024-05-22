@@ -10,6 +10,6 @@ void camera_update_direction_vectors(camera* c)
 		sinf(c->yaw) * cosf(c->pitch)
 	};
 
-	c->right = vec3_normalize(vec3_cross(c->forward, WORLD_UP));
-	c->up = vec3_normalize(vec3_cross(c->right, c->forward));
+	c->right = vec3_normalize(vec3_cross(WORLD_UP, c->forward));
+	c->up = vec3_normalize(vec3_cross(c->forward, c->right));
 }
