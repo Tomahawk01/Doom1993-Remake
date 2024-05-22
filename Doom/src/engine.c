@@ -21,9 +21,9 @@
 
 typedef struct draw_node
 {
-	int texture;
-	mesh mesh;
-	struct draw_node* next;
+	mesh* mesh;
+	struct draw_node* front;
+	struct draw_node* back;
 } draw_node, draw_list;
 
 typedef struct wall_tex_info
@@ -32,8 +32,10 @@ typedef struct wall_tex_info
 	int height;
 } wall_tex_info;
 
-static void generate_meshes(const map* map, const gl_map* gl_map);
 static sector* map_get_sector(map* map, gl_map* gl_map, vec2 position);
+static void render_node(draw_node* node);
+static void generate_meshes(const map* map, const gl_map* gl_map);
+static void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const gl_map* gl_map);
 
 static size_t num_flats;
 static size_t num_wall_textures;
@@ -49,7 +51,7 @@ static gl_map gl_m;
 static float player_height;
 static int sky_flat;
 
-static draw_list* d_list;
+static draw_node* root_draw_node;
 
 void engine_init(wad* wad, const char* mapname)
 {
@@ -210,8 +212,17 @@ void engine_render()
 	renderer_set_view(view);
 
 	renderer_set_palette_index(palette_index);
-	for (draw_node* node = d_list; node != NULL; node = node->next)
-		renderer_draw_mesh(&node->mesh, mat4_identity());
+	render_node(root_draw_node);
+}
+
+void render_node(draw_node* node)
+{
+	if (node->mesh)
+		renderer_draw_mesh(node->mesh, mat4_identity());
+	if (node->front)
+		render_node(node->front);
+	if (node->back)
+		render_node(node->back);
 }
 
 sector* map_get_sector(map* map, gl_map* gl_map, vec2 position)
@@ -251,34 +262,50 @@ sector* map_get_sector(map* map, gl_map* gl_map, vec2 position)
 
 void generate_meshes(const map* map, const gl_map* gl_map)
 {
-	draw_node** draw_node_ptr = &d_list;
+	generate_node(&root_draw_node, gl_map->num_nodes - 1, map, gl_map);
+}
 
-	draw_node* flats_node = malloc(sizeof(draw_node));
-	flats_node->next = NULL;
-	flats_node->texture = -1;
+void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const gl_map* gl_map)
+{
+	draw_node* d_node = malloc(sizeof(draw_node));
+	*d_node = (draw_node){ NULL, NULL, NULL };
+	*draw_node_ptr = d_node;
 
-	vertexarray vertices;
-	indexarray indices;
-	darray_init(vertices, 0);
-	darray_init(indices, 0);
-
-	int start_idx = 0;
-	for (int i = 0; i < gl_map->num_subsectors; i++)
+	if (id & 0x8000)
 	{
-		sector* sector = NULL;
-		gl_subsector* subsector = &gl_map->subsectors[i];
+		gl_subsector* subsector = &gl_map->subsectors[id & 0x7fff];
+
+		vertexarray vertices;
+		indexarray indices;
+		darray_init(vertices, 0);
+		darray_init(indices, 0);
+
+		sector* the_sector = NULL;
 		size_t n_vertices = subsector->num_segs;
 		if (n_vertices < 3)
-			continue;
+			return;
 
 		vertex* floor_vertices = malloc(sizeof(vertex) * n_vertices);
 		vertex* ceil_vertices = malloc(sizeof(vertex) * n_vertices);
+
+		size_t start_index = 0;
 
 		for (int j = 0; j < subsector->num_segs; j++)
 		{
 			gl_segment* segment = &gl_map->segments[j + subsector->first_seg];
 
-			if (sector == NULL && segment->linedef != 0xffff)
+			vec2 start, end;
+			if (segment->start_vertex & VERT_IS_GL)
+				start = gl_map->vertices[segment->start_vertex & 0x7fff];
+			else
+				start = map->vertices[segment->start_vertex];
+
+			if (segment->end_vertex & VERT_IS_GL)
+				end = gl_map->vertices[segment->end_vertex & 0x7fff];
+			else
+				end = map->vertices[segment->end_vertex];
+
+			if (the_sector == NULL && segment->linedef != 0xffff)
 			{
 				linedef* linedef = &map->linedefs[segment->linedef];
 				int sector_index = -1;
@@ -288,251 +315,239 @@ void generate_meshes(const map* map, const gl_map* gl_map)
 					sector_index = map->sidedefs[linedef->front_sidedef].sector_index;
 
 				if (sector_index >= 0)
-					sector = &map->sectors[sector_index];
+					the_sector = &map->sectors[sector_index];
 			}
 
-			vec2 v;
-			if (segment->start_vertex & VERT_IS_GL)
-				v = gl_map->vertices[segment->start_vertex & 0x7fff];
-			else
-				v = map->vertices[segment->start_vertex];
-
 			floor_vertices[j] = ceil_vertices[j] = (vertex){
-				.position = {v.x, 0.0f, -v.y},
-				.tex_coords = {v.x / FLAT_TEXTURE_SIZE, -v.y / FLAT_TEXTURE_SIZE},
+				.position = {start.x, 0.0f, -start.y},
+				.tex_coords = {start.x / FLAT_TEXTURE_SIZE, -start.y / FLAT_TEXTURE_SIZE},
 				.texture_type = 1
 			};
+
+			if (segment->linedef == 0xffff)
+				continue;
+
+			linedef* linedef = &map->linedefs[segment->linedef];
+
+			sidedef* front_sidedef = &map->sidedefs[linedef->front_sidedef];
+			sidedef* back_sidedef = &map->sidedefs[linedef->back_sidedef];
+
+			if (segment->side)
+			{
+				sidedef* tmp = front_sidedef;
+				front_sidedef = back_sidedef;
+				back_sidedef = tmp;
+			}
+
+			sector* front_sector = &map->sectors[front_sidedef->sector_index];
+			sector* back_sector = &map->sectors[back_sidedef->sector_index];
+
+			sidedef* sidedef = front_sidedef;
+			sector* sector = front_sector;
+
+			if (linedef->flags & LINEDEF_FLAGS_TWO_SIDED)
+			{
+				if (sidedef->lower >= 0 && front_sector->floor < back_sector->floor)
+				{
+					vec3 p0 = { start.x, front_sector->floor, -start.y };
+					vec3 p1 = { end.x, front_sector->floor, -end.y };
+					vec3 p2 = { end.x, back_sector->floor, -end.y };
+					vec3 p3 = { start.x, back_sector->floor, -start.y };
+
+					const float x = p1.x - p0.x;
+					const float y = p1.z - p0.z;
+					const float width = sqrtf(x * x + y * y);
+					const float height = fabsf(p3.y - p0.y);
+
+					float tw = wall_textures_info[sidedef->lower].width;
+					float th = wall_textures_info[sidedef->lower].height;
+
+					float w = width / tw;
+					float h = height / th;
+					float x_off = sidedef->x_off / tw;
+					float y_off = sidedef->y_off / th;
+
+					if (linedef->flags & LINEDEF_FLAGS_LOWER_UNPEGGED)
+						y_off += (front_sector->ceiling - back_sector->floor) / th;
+
+					float tx0 = x_off;
+					float ty0 = y_off + h;
+					float tx1 = x_off + w;
+					float ty1 = y_off;
+
+					vec2 max_coords = wall_max_coords[sidedef->lower];
+					tx0 *= max_coords.x, tx1 *= max_coords.x;
+					ty0 *= max_coords.y, ty1 *= max_coords.y;
+
+					float light = front_sector->light_level / 256.0f;
+					vertex v[] = {
+						{p0, {tx0, ty0}, sidedef->lower, 2, light, max_coords},
+						{p1, {tx1, ty0}, sidedef->lower, 2, light, max_coords},
+						{p2, {tx1, ty1}, sidedef->lower, 2, light, max_coords},
+						{p3, {tx0, ty1}, sidedef->lower, 2, light, max_coords}
+					};
+
+					start_index = vertices.count;
+					for (int i = 0; i < 4; i++)
+						darray_push(vertices, v[i]);
+
+					darray_push(indices, start_index + 0);
+					darray_push(indices, start_index + 1);
+					darray_push(indices, start_index + 3);
+					darray_push(indices, start_index + 1);
+					darray_push(indices, start_index + 2);
+					darray_push(indices, start_index + 3);
+				}
+
+				if (sidedef->upper >= 0 && front_sector->ceiling > back_sector->ceiling && !(front_sector->ceiling_tex == sky_flat && back_sector->ceiling_tex == sky_flat))
+				{
+					vec3 p0 = { start.x, back_sector->ceiling, -start.y };
+					vec3 p1 = { end.x, back_sector->ceiling, -end.y };
+					vec3 p2 = { end.x, front_sector->ceiling, -end.y };
+					vec3 p3 = { start.x, front_sector->ceiling, -start.y };
+
+					const float x = p1.x - p0.x;
+					const float y = p1.z - p0.z;
+					const float width = sqrtf(x * x + y * y);
+					const float height = -fabsf(p3.y - p0.y);
+
+					float tw = wall_textures_info[sidedef->upper].width;
+					float th = wall_textures_info[sidedef->upper].height;
+
+					float w = width / tw;
+					float h = height / th;
+					float x_off = sidedef->x_off / tw;
+					float y_off = sidedef->y_off / th;
+
+					if (linedef->flags & LINEDEF_FLAGS_UPPER_UNPEGGED)
+						y_off -= h;
+
+					float tx0 = x_off;
+					float ty0 = y_off;
+					float tx1 = x_off + w;
+					float ty1 = y_off + h;
+
+					vec2 max_coords = wall_max_coords[sidedef->upper];
+					tx0 *= max_coords.x, tx1 *= max_coords.x;
+					ty0 *= max_coords.y, ty1 *= max_coords.y;
+
+					float light = front_sector->light_level / 256.0f;
+					vertex v[] = {
+						{p0, {tx0, ty0}, sidedef->upper, 2, light, max_coords},
+						{p1, {tx1, ty0}, sidedef->upper, 2, light, max_coords},
+						{p2, {tx1, ty1}, sidedef->upper, 2, light, max_coords},
+						{p3, {tx0, ty1}, sidedef->upper, 2, light, max_coords},
+					};
+
+					start_index = vertices.count;
+					for (int i = 0; i < 4; i++)
+						darray_push(vertices, v[i]);
+
+					darray_push(indices, start_index + 0);
+					darray_push(indices, start_index + 1);
+					darray_push(indices, start_index + 3);
+					darray_push(indices, start_index + 1);
+					darray_push(indices, start_index + 2);
+					darray_push(indices, start_index + 3);
+				}
+			}
+			else
+			{
+				vec3 p0 = { start.x, sector->floor, -start.y };
+				vec3 p1 = { end.x, sector->floor, -end.y };
+				vec3 p2 = { end.x, sector->ceiling, -end.y };
+				vec3 p3 = { start.x, sector->ceiling, -start.y };
+
+				const float x = p1.x - p0.x;
+				const float y = p1.z - p0.z;
+				const float width = sqrtf(x * x + y * y);
+				const float height = p3.y - p0.y;
+
+				float tw = wall_textures_info[sidedef->middle].width;
+				float th = wall_textures_info[sidedef->middle].height;
+
+				float w = width / tw;
+				float h = height / th;
+				float x_off = sidedef->x_off / tw;
+				float y_off = sidedef->y_off / th;
+
+				if (linedef->flags & LINEDEF_FLAGS_LOWER_UNPEGGED)
+					y_off -= h;
+
+				float tx0 = x_off, ty0 = y_off + h;
+				float tx1 = x_off + w, ty1 = y_off;
+
+				vec2 max_coords = wall_max_coords[sidedef->middle];
+				tx0 *= max_coords.x, tx1 *= max_coords.x;
+				ty0 *= max_coords.y, ty1 *= max_coords.y;
+
+				float light = sector->light_level / 256.0f;
+				vertex v[] = {
+					{p0, {tx0, ty0}, sidedef->middle, 2, light, max_coords},
+					{p1, {tx1, ty0}, sidedef->middle, 2, light, max_coords},
+					{p2, {tx1, ty1}, sidedef->middle, 2, light, max_coords},
+					{p3, {tx0, ty1}, sidedef->middle, 2, light, max_coords},
+				};
+
+				start_index = vertices.count;
+				for (int i = 0; i < 4; i++)
+					darray_push(vertices, v[i]);
+
+				darray_push(indices, start_index + 0);
+				darray_push(indices, start_index + 1);
+				darray_push(indices, start_index + 3);
+				darray_push(indices, start_index + 1);
+				darray_push(indices, start_index + 2);
+				darray_push(indices, start_index + 3);
+			}
 		}
 
+		start_index = vertices.count;
 		for (int i = 0; i < n_vertices; i++)
 		{
-			int floor_tex = sector->floor_tex;
-			int ceil_tex = sector->ceiling_tex;
+			int floor_tex = the_sector->floor_tex;
+			int ceil_tex = the_sector->ceiling_tex;
 
-			floor_vertices[i].position.y = sector->floor;
+			floor_vertices[i].position.y = the_sector->floor;
 			floor_vertices[i].texture_index = floor_tex >= 0 && floor_tex < num_flats ? floor_tex : -1;
 
-			ceil_vertices[i].position.y = sector->ceiling;
+			ceil_vertices[i].position.y = the_sector->ceiling;
 			ceil_vertices[i].texture_index = ceil_tex >= 0 && ceil_tex < num_flats ? ceil_tex : -1;
 
-			floor_vertices[i].light = ceil_vertices[i].light = sector->light_level / 256.0f;
+			floor_vertices[i].light = ceil_vertices[i].light = the_sector->light_level / 256.0f;
 		}
 
 		for (int i = 0; i < n_vertices; i++)
 			darray_push(vertices, floor_vertices[i]);
 
-		int ceil_start_idx = vertices.count;
 		for (int i = 0; i < n_vertices; i++)
 			darray_push(vertices, ceil_vertices[i]);
 
 		// Triangulation will form (n - 2) triangles so 2 * 3 * (n - 3) indices are required
 		for (int j = 0, k = 1; j < n_vertices - 2; j++, k++)
 		{
-			darray_push(indices, start_idx);
-			darray_push(indices, start_idx + k + 1);
-			darray_push(indices, start_idx + k);
+			darray_push(indices, start_index + 0);
+			darray_push(indices, start_index + k + 1);
+			darray_push(indices, start_index + k);
 
-			darray_push(indices, ceil_start_idx);
-			darray_push(indices, ceil_start_idx + k);
-			darray_push(indices, ceil_start_idx + k + 1);
+			darray_push(indices, start_index + n_vertices);
+			darray_push(indices, start_index + n_vertices + k);
+			darray_push(indices, start_index + n_vertices + k + 1);
 		}
 
-		start_idx = vertices.count;
 		free(floor_vertices);
 		free(ceil_vertices);
+
+		d_node->mesh = malloc(sizeof(mesh));
+		mesh_create(d_node->mesh, vertices.count, vertices.data, indices.count,
+					indices.data);
+		darray_free(vertices);
+		darray_free(indices);
 	}
-
-	mesh_create(&flats_node->mesh, vertices.count, vertices.data, indices.count, indices.data);
-	*draw_node_ptr = flats_node;
-	draw_node_ptr = &flats_node->next;
-
-	darray_free(vertices);
-	darray_free(indices);
-
-	uint32_t quad_indices[] = {
-		0, 1, 3,	// 1st triangle
-		1, 2, 3		// 2nd triangle
-	};
-
-	for (int i = 0; i < gl_map->num_segments; i++)
+	else
 	{
-		gl_segment* segment = &gl_map->segments[i];
-		if (segment->linedef == 0xffff) 
-			continue;
-
-		linedef* ld = &map->linedefs[segment->linedef];
-
-		vec2 start;
-		vec2 end;
-		if (segment->start_vertex & VERT_IS_GL)
-			start = gl_map->vertices[segment->start_vertex & 0x7fff];
-		else
-			start = map->vertices[segment->start_vertex];
-
-		if (segment->end_vertex & VERT_IS_GL)
-			end = gl_map->vertices[segment->end_vertex & 0x7fff];
-		else
-			end = map->vertices[segment->end_vertex];
-
-		sidedef* front_sidedef = &map->sidedefs[ld->front_sidedef];
-		sidedef* back_sidedef = &map->sidedefs[ld->back_sidedef];
-
-		if (segment->side)
-		{
-			sidedef* tmp = front_sidedef;
-			front_sidedef = back_sidedef;
-			back_sidedef = tmp;
-		}
-
-		sector* front_sector = &map->sectors[front_sidedef->sector_index];
-		sector* back_sector = &map->sectors[back_sidedef->sector_index];
-
-		sidedef* sidedef = front_sidedef;
-		sector* sector = front_sector;
-
-		if (ld->flags & LINEDEF_FLAGS_TWO_SIDED)
-		{
-			if (sidedef->lower >= 0 && front_sector->floor < back_sector->floor)
-			{
-				draw_node* floor_node = malloc(sizeof(draw_node));
-				floor_node->next = NULL;
-
-				vec3 p0 = { start.x, front_sector->floor, -start.y };
-				vec3 p1 = { end.x, front_sector->floor, -end.y };
-				vec3 p2 = { end.x, back_sector->floor, -end.y };
-				vec3 p3 = { start.x, back_sector->floor, -start.y };
-
-				const float x = p1.x - p0.x;
-				const float y = p1.z - p0.z;
-				const float width = sqrtf(x * x + y * y);
-				const float height = fabsf(p3.y - p0.y);
-
-				float tw = wall_textures_info[sidedef->lower].width;
-				float th = wall_textures_info[sidedef->lower].height;
-
-				float w = width / tw;
-				float h = height / th;
-				float x_off = sidedef->x_off / tw;
-				float y_off = sidedef->y_off / th;
-				if (ld->flags & LINEDEF_FLAGS_LOWER_UNPEGGED)
-					y_off += (front_sector->ceiling - back_sector->floor) / th;
-
-				float tx0 = x_off;
-				float ty0 = y_off + h;
-				float tx1 = x_off + w;
-				float ty1 = y_off;
-
-				vec2 max_coords = wall_max_coords[sidedef->lower];
-				tx0 *= max_coords.x, tx1 *= max_coords.x;
-				ty0 *= max_coords.y, ty1 *= max_coords.y;
-
-				float light = front_sector->light_level / 256.0f;
-				vertex vertices[] = {
-					{p0, {tx0, ty0}, sidedef->lower, 2, light, max_coords},
-					{p1, {tx1, ty0}, sidedef->lower, 2, light, max_coords},
-					{p2, {tx1, ty1}, sidedef->lower, 2, light, max_coords},
-					{p3, {tx0, ty1}, sidedef->lower, 2, light, max_coords}
-				};
-
-				mesh_create(&floor_node->mesh, 4, vertices, 6, quad_indices);
-				*draw_node_ptr = floor_node;
-				draw_node_ptr = &floor_node->next;
-			}
-
-			if (sidedef->upper >= 0 && front_sector->ceiling > back_sector->ceiling && !(front_sector->ceiling_tex == sky_flat && back_sector->ceiling_tex == sky_flat))
-			{
-				draw_node* ceil_node = malloc(sizeof(draw_node));
-				ceil_node->next = NULL;
-
-				vec3 p0 = { start.x, back_sector->ceiling, -start.y };
-				vec3 p1 = { end.x, back_sector->ceiling, -end.y };
-				vec3 p2 = { end.x, front_sector->ceiling, -end.y };
-				vec3 p3 = { start.x, front_sector->ceiling, -start.y };
-
-				const float x = p1.x - p0.x;
-				const float y = p1.z - p0.z;
-				const float width = sqrtf(x * x + y * y);
-				const float height = -fabsf(p3.y - p0.y);
-
-				float tw = wall_textures_info[sidedef->upper].width;
-				float th = wall_textures_info[sidedef->upper].height;
-
-				float w = width / tw;
-				float h = height / th;
-				float x_off = sidedef->x_off / tw;
-				float y_off = sidedef->y_off / th;
-				if (ld->flags & LINEDEF_FLAGS_UPPER_UNPEGGED)
-					y_off -= h;
-
-				float tx0 = x_off;
-				float ty0 = y_off;
-				float tx1 = x_off + w;
-				float ty1 = y_off + h;
-
-				vec2 max_coords = wall_max_coords[sidedef->upper];
-				tx0 *= max_coords.x, tx1 *= max_coords.x;
-				ty0 *= max_coords.y, ty1 *= max_coords.y;
-
-				float light = front_sector->light_level / 256.0f;
-				vertex vertices[] = {
-					{p0, {tx0, ty0}, sidedef->upper, 2, light, max_coords},
-					{p1, {tx1, ty0}, sidedef->upper, 2, light, max_coords},
-					{p2, {tx1, ty1}, sidedef->upper, 2, light, max_coords},
-					{p3, {tx0, ty1}, sidedef->upper, 2, light, max_coords}
-				};
-
-				mesh_create(&ceil_node->mesh, 4, vertices, 6, quad_indices);
-				*draw_node_ptr = ceil_node;
-				draw_node_ptr = &ceil_node->next;
-			}
-		}
-		else if (sidedef->middle >= 0)
-		{
-			draw_node* node = malloc(sizeof(draw_node));
-			node->next = NULL;
-
-			vec3 p0 = { start.x, sector->floor, -start.y };
-			vec3 p1 = { end.x, sector->floor, -end.y };
-			vec3 p2 = { end.x, sector->ceiling, -end.y };
-			vec3 p3 = { start.x, sector->ceiling, -start.y };
-
-			const float x = p1.x - p0.x;
-			const float y = p1.z - p0.z;
-			const float width = sqrtf(x * x + y * y);
-			const float height = p3.y - p0.y;
-
-			float tw = wall_textures_info[sidedef->middle].width;
-			float th = wall_textures_info[sidedef->middle].height;
-
-			float w = width / tw;
-			float h = height / th;
-
-			float x_off = sidedef->x_off / tw;
-			float y_off = sidedef->y_off / th;
-			if (ld->flags & LINEDEF_FLAGS_LOWER_UNPEGGED)
-				y_off -= h;
-
-			float tx0 = x_off;
-			float ty0 = y_off + h;
-			float tx1 = x_off + w;
-			float ty1 = y_off;
-
-			vec2 max_coords = wall_max_coords[sidedef->middle];
-			tx0 *= max_coords.x, tx1 *= max_coords.x;
-			ty0 *= max_coords.y, ty1 *= max_coords.y;
-
-			float light = sector->light_level / 256.0f;
-			vertex vertices[] = {
-				{p0, {tx0, ty0}, sidedef->middle, 2, light, max_coords},
-				{p1, {tx1, ty0}, sidedef->middle, 2, light, max_coords},
-				{p2, {tx1, ty1}, sidedef->middle, 2, light, max_coords},
-				{p3, {tx0, ty1}, sidedef->middle, 2, light, max_coords}
-			};
-
-			mesh_create(&node->mesh, 4, vertices, 6, quad_indices);
-
-			*draw_node_ptr = node;
-			draw_node_ptr = &node->next;
-		}
+		gl_node* node = &gl_map->nodes[id];
+		generate_node(&d_node->front, node->front_child_id, map, gl_map);
+		generate_node(&d_node->back, node->back_child_id, map, gl_map);
 	}
 }
