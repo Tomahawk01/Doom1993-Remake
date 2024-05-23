@@ -5,13 +5,12 @@
 #include "glad/glad.h"
 
 #include <math.h>
-#include <stdint.h>
 
-static void init_shader();
-static void init_quad();
+static void init_skybox();
+static void init_shaders();
 static void init_projection();
 
-const char* vertSrc =
+const char* vert_src =
 	"#version 330 core\n"
 	"layout (location = 0) in vec3 pos;\n"
 	"layout (location = 1) in vec2 texCoords;\n"
@@ -36,7 +35,7 @@ const char* vertSrc =
 	"  MaxTexCoords = maxTexCoords;\n"
 	"}\n";
 
-const char* fragSrc =
+const char* frag_src =
 	"#version 330 core\n"
 	"in vec2 TexCoords;\n"
 	"flat in int TexIndex;\n"
@@ -61,14 +60,40 @@ const char* fragSrc =
 	"  fragColor = vec4(color * Light, 1.0);\n"
 	"}\n";
 
-static mesh quad_mesh;
+const char* sky_vert_src =
+	"#version 330 core\n"
+	"layout (location = 0) in vec3 pos;\n"
+	"out vec3 TexCoords;\n"
+	"uniform mat4 u_view;\n"
+	"uniform mat4 u_projection;\n"
+	"void main() {\n"
+	"  vec4 position = u_projection * mat4(mat3(u_view)) * vec4(pos, 1.0);\n"
+	"  TexCoords = pos;\n"
+	"  gl_Position = position.xyww;\n"
+	"}\n";
+
+const char* sky_frag_src =
+	"#version 330 core\n"
+	"in vec3 TexCoords;\n"
+	"out vec4 fragColor;\n"
+	"uniform sampler1DArray u_palettes;\n"
+	"uniform usamplerCube u_sky;\n"
+	"uniform int u_palette_index;\n"
+	"void main() {\n"
+	"  fragColor = texelFetch(u_palettes, ivec2(int(texture(u_sky, TexCoords).r), u_palette_index), 0);\n"
+	"}\n";
+
+unsigned int skybox_vao, skybox_vbo;
 static float width;
 static float height;
-static GLuint program;
+static GLuint program, sky_program;
 static GLuint model_location;
 static GLuint view_location;
 static GLuint projection_location;
+static GLuint sky_view_location;
+static GLuint sky_projection_location;
 static GLuint palette_index_location;
+static GLuint sky_palette_index_location;
 
 void renderer_init(int w, int h)
 {
@@ -79,8 +104,8 @@ void renderer_init(int w, int h)
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 
-	init_quad();
-	init_shader();
+	init_skybox();
+	init_shaders();
 	init_projection();
 }
 
@@ -97,6 +122,10 @@ void renderer_set_palette_texture(GLuint palette_texture)
 
 void renderer_set_palette_index(int index)
 {
+	glUseProgram(sky_program);
+	glUniform1i(sky_palette_index_location, index);
+
+	glUseProgram(program);
 	glUniform1i(palette_index_location, index);
 }
 
@@ -104,6 +133,12 @@ void renderer_set_wall_texture(GLuint texture)
 {
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D_ARRAY, texture);
+}
+
+void renderer_set_sky_texture(GLuint texture)
+{
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
 }
 
 void renderer_set_flat_texture(GLuint texture)
@@ -114,11 +149,19 @@ void renderer_set_flat_texture(GLuint texture)
 
 void renderer_set_projection(mat4 projection)
 {
+	glUseProgram(sky_program);
+	glUniformMatrix4fv(sky_projection_location, 1, GL_FALSE, projection.v);
+
+	glUseProgram(program);
 	glUniformMatrix4fv(projection_location, 1, GL_FALSE, projection.v);
 }
 
 void renderer_set_view(mat4 view)
 {
+	glUseProgram(sky_program);
+	glUniformMatrix4fv(sky_view_location, 1, GL_FALSE, view.v);
+
+	glUseProgram(program);
 	glUniformMatrix4fv(view_location, 1, GL_FALSE, view.v);
 }
 
@@ -136,11 +179,38 @@ void renderer_draw_mesh(const mesh* mesh, mat4 transformation)
 	glDrawElements(GL_TRIANGLES, mesh->num_indices, GL_UNSIGNED_INT, NULL);
 }
 
-static void init_shader()
+void renderer_draw_sky()
 {
-	GLuint vertex = compile_shader(GL_VERTEX_SHADER, vertSrc);
-	GLuint fragment = compile_shader(GL_FRAGMENT_SHADER, fragSrc);
+	glDepthFunc(GL_LEQUAL);
+	glDisable(GL_CULL_FACE);
+	glUseProgram(sky_program);
+	glBindVertexArray(skybox_vao);
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	glDepthFunc(GL_LESS);
+	glEnable(GL_CULL_FACE);
 
+	glUseProgram(program);
+}
+
+void init_shaders()
+{
+	GLuint sky_vertex = compile_shader(GL_VERTEX_SHADER, sky_vert_src);
+	GLuint sky_fragment = compile_shader(GL_FRAGMENT_SHADER, sky_frag_src);
+	sky_program = link_shader(2, sky_vertex, sky_fragment);
+	glUseProgram(sky_program);
+
+	sky_projection_location = glGetUniformLocation(sky_program, "u_projection");
+	sky_view_location = glGetUniformLocation(sky_program, "u_view");
+	sky_palette_index_location = glGetUniformLocation(sky_program, "u_palette_index");
+
+	GLuint sky_palette_location = glGetUniformLocation(sky_program, "u_palettes");
+	glUniform1i(sky_palette_location, 0);
+
+	GLuint sky_texture_location = glGetUniformLocation(sky_program, "u_sky");
+	glUniform1i(sky_texture_location, 3);
+
+	GLuint vertex = compile_shader(GL_VERTEX_SHADER, vert_src);
+	GLuint fragment = compile_shader(GL_FRAGMENT_SHADER, frag_src);
 	program = link_shader(2, vertex, fragment);
 	glUseProgram(program);
 
@@ -152,28 +222,36 @@ static void init_shader()
 	GLuint palette_location = glGetUniformLocation(program, "u_palettes");
 	glUniform1i(palette_location, 0);
 
-	GLuint texture_array_location = glGetUniformLocation(program, "u_flat_tex");
-	glUniform1i(texture_array_location, 1);
+	GLuint flat_texture_location = glGetUniformLocation(program, "u_flat_tex");
+	glUniform1i(flat_texture_location, 1);
 
-	GLuint texture_location = glGetUniformLocation(program, "u_wall_tex");
-	glUniform1i(texture_location, 2);
+	GLuint wall_texture_location = glGetUniformLocation(program, "u_wall_tex");
+	glUniform1i(wall_texture_location, 2);
 }
 
-static void init_quad()
+void init_skybox()
 {
-	vertex vertices[] = {
-		{.position = { 0.5f, 0.5f, 0.0f}, .tex_coords = {1.0f, 1.0f}},	// top-right
-		{.position = { 0.5f,-0.5f, 0.0f}, .tex_coords = {1.0f, 0.0f}},	// bottom-right
-		{.position = {-0.5f,-0.5f, 0.0f}, .tex_coords = {0.0f, 0.0f}},  // bottom-left
-		{.position = {-0.5f, 0.5f, 0.0f}, .tex_coords = {0.0f, 1.0f}}	// top-left
+	float vertices[] = {
+		-1.0f, 1.0f,-1.0f,-1.0f,-1.0f,-1.0f, 1.0f,-1.0f,-1.0f, 1.0f,
+		-1.0f,-1.0f, 1.0f, 1.0f,-1.0f,-1.0f, 1.0f,-1.0f,-1.0f,-1.0f,
+		 1.0f,-1.0f,-1.0f,-1.0f,-1.0f, 1.0f,-1.0f,-1.0f, 1.0f,-1.0f,
+		-1.0f, 1.0f, 1.0f,-1.0f,-1.0f, 1.0f, 1.0f,-1.0f,-1.0f, 1.0f,
+		-1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+		-1.0f, 1.0f,-1.0f,-1.0f,-1.0f,-1.0f, 1.0f,-1.0f, 1.0f, 1.0f,
+		 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,-1.0f, 1.0f,-1.0f,
+		-1.0f, 1.0f,-1.0f, 1.0f,-1.0f, 1.0f, 1.0f,-1.0f, 1.0f, 1.0f,
+		 1.0f, 1.0f, 1.0f, 1.0f,-1.0f, 1.0f, 1.0f,-1.0f, 1.0f,-1.0f,
+		-1.0f,-1.0f,-1.0f,-1.0f,-1.0f, 1.0f, 1.0f,-1.0f,-1.0f, 1.0f,
+		-1.0f,-1.0f,-1.0f,-1.0f, 1.0f, 1.0f,-1.0f, 1.0f
 	};
 
-	uint32_t indices[] = {
-		0, 1, 3,
-		1, 2, 3
-	};
-
-	mesh_create(&quad_mesh, 4, vertices, 6, indices);
+	glGenVertexArrays(1, &skybox_vao);
+	glGenBuffers(1, &skybox_vbo);
+	glBindVertexArray(skybox_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, skybox_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 }
 
 static void init_projection()

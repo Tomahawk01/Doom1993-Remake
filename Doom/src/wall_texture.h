@@ -13,3 +13,4 @@ typedef struct wall_tex
 } wall_tex;
 
 GLuint generate_wall_texture_array(const wall_tex* textures, size_t num_textures, vec2* max_coords_array);
+GLuint generate_texture_cubemap(const wall_tex* texture);

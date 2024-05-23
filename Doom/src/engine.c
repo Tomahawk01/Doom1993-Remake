@@ -5,6 +5,7 @@
 #include "map.h"
 #include "palette.h"
 #include "darray.h"
+#include "utils.h"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -85,7 +86,12 @@ void engine_init(wad* wad, const char* mapname)
 	wall_textures_info = malloc(sizeof(wall_tex_info) * num_wall_textures);
 	wall_max_coords = malloc(sizeof(vec2) * num_wall_textures);
 	for (int i = 0; i < num_wall_textures; i++)
+	{
+		if (strcmp_nocase(textures[i].name, "SKY1") == 0)
+			renderer_set_sky_texture(generate_texture_cubemap(&textures[i]));
+
 		wall_textures_info[i] = (wall_tex_info){ textures[i].width, textures[i].height };
+	}
 
 	GLuint wall_texture_array = generate_wall_texture_array(textures, num_wall_textures, wall_max_coords);
 	wad_free_wall_textures(textures, num_wall_textures);
@@ -213,6 +219,7 @@ void engine_render()
 
 	renderer_set_palette_index(palette_index);
 	render_node(root_draw_node);
+	renderer_draw_sky();
 }
 
 void render_node(draw_node* node)
