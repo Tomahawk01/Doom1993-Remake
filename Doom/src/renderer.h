@@ -16,5 +16,13 @@ void renderer_set_view(mat4 view);
 
 vec2 renderer_get_size();
 
-void renderer_draw_mesh(const mesh* mesh, mat4 transformation);
+enum
+{
+	SHADER_DEFAULT,
+	SHADER_SKY,
+
+	NUM_SHADERS
+};
+
+void renderer_draw_mesh(const mesh* mesh, int shader, mat4 transformation);
 void renderer_draw_sky();

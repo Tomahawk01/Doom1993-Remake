@@ -225,7 +225,7 @@ void engine_render()
 void render_node(draw_node* node)
 {
 	if (node->mesh)
-		renderer_draw_mesh(node->mesh, mat4_identity());
+		renderer_draw_mesh(node->mesh, SHADER_DEFAULT, mat4_identity());
 	if (node->front)
 		render_node(node->front);
 	if (node->back)
@@ -546,8 +546,7 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 		free(ceil_vertices);
 
 		d_node->mesh = malloc(sizeof(mesh));
-		mesh_create(d_node->mesh, vertices.count, vertices.data, indices.count,
-					indices.data);
+		mesh_create(d_node->mesh, VERTEX_LAYOUT_FULL, vertices.count, vertices.data, indices.count, indices.data);
 		darray_free(vertices);
 		darray_free(indices);
 	}
