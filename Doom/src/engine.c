@@ -27,16 +27,29 @@ typedef struct draw_node
 	struct draw_node* back;
 } draw_node, draw_list;
 
+typedef struct stencil_node
+{
+	mat4 transformation;
+	struct stencil_node* next;
+} stencil_node;
+
+typedef struct stencil_quad_list
+{
+	stencil_node* head;
+	stencil_node* tail;
+} stencil_quad_list;
+
 typedef struct wall_tex_info
 {
 	int width;
 	int height;
 } wall_tex_info;
 
-static sector* map_get_sector(map* map, gl_map* gl_map, vec2 position);
+static sector* map_get_sector(vec2 position);
 static void render_node(draw_node* node);
-static void generate_meshes(const map* map, const gl_map* gl_map);
-static void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const gl_map* gl_map);
+static void insert_stencil_quad(mat4 transformation);
+static void generate_meshes();
+static void generate_node(draw_node** draw_node_ptr, size_t id);
 
 static size_t num_flats;
 static size_t num_wall_textures;
@@ -50,9 +63,12 @@ static vec2 last_mouse_pos;
 static map m;
 static gl_map gl_m;
 static float player_height;
+static float max_sector_height;
 static int sky_flat;
 
 static draw_node* root_draw_node;
+static stencil_quad_list stencil_list;
+static mesh quad_mesh;
 
 void engine_init(wad* wad, const char* mapname)
 {
@@ -132,11 +148,23 @@ void engine_init(wad* wad, const char* mapname)
 		}
 	}
 
-	generate_meshes(&m, &gl_m);
+	stencil_list = (stencil_quad_list){ NULL, NULL };
+	generate_meshes();
 
 	renderer_set_flat_texture(flat_texture_array);
 	renderer_set_wall_texture(wall_texture_array);
 	renderer_set_palette_texture(palette_texture);
+
+	vec3 stencil_quad_vertices[] = {
+		{0.0f, 0.0f, 0.0f},
+		{0.0f, 1.0f, 0.0f},
+		{1.0f, 1.0f, 0.0f},
+		{1.0f, 0.0f, 0.0f}
+	};
+
+	uint32_t stencil_quad_indices[] = { 0, 2, 1, 0, 3, 2 };
+
+	mesh_create(&quad_mesh, VERTEX_LAYOUT_PLAIN, 4, stencil_quad_vertices, 6, stencil_quad_indices);
 }
 
 static int palette_index = 0;
@@ -152,7 +180,7 @@ void engine_update(float dt)
 	camera_update_direction_vectors(&cam);
 
 	vec2 position = { cam.position.x, cam.position.z };
-	sector* sector = map_get_sector(&m, &gl_m, position);
+	sector* sector = map_get_sector(position);
 	if (sector)
 		cam.position.y = sector->floor + player_height;
 
@@ -218,7 +246,16 @@ void engine_render()
 	renderer_set_view(view);
 
 	renderer_set_palette_index(palette_index);
+
+	glStencilMask(0x00);
 	render_node(root_draw_node);
+
+	glStencilMask(0xff);
+	for (stencil_node* node = stencil_list.head; node != NULL; node = node->next)
+	{
+		renderer_draw_mesh(&quad_mesh, SHADER_PLAIN, node->transformation);
+	}
+
 	renderer_draw_sky();
 }
 
@@ -232,47 +269,65 @@ void render_node(draw_node* node)
 		render_node(node->back);
 }
 
-sector* map_get_sector(map* map, gl_map* gl_map, vec2 position)
+sector* map_get_sector(vec2 position)
 {
-	uint16_t id = gl_map->num_nodes - 1;
+	uint16_t id = gl_m.num_nodes - 1;
 	while ((id & 0x8000) == 0)
 	{
-		if (id > gl_map->num_nodes)
+		if (id > gl_m.num_nodes)
 			return NULL;
 
-		gl_node* node = &gl_map->nodes[id];
+		gl_node* node = &gl_m.nodes[id];
 
 		vec2 delta = vec2_sub(position, node->partition);
 		bool is_on_back = (delta.x * node->delta_partition.y - delta.y * node->delta_partition.x) <= 0.0f;
 
 		if (is_on_back)
-			id = gl_map->nodes[id].back_child_id;
+			id = gl_m.nodes[id].back_child_id;
 		else
-			id = gl_map->nodes[id].front_child_id;
+			id = gl_m.nodes[id].front_child_id;
 	}
 
-	if ((id & 0x7fff) >= gl_map->num_subsectors)
+	if ((id & 0x7fff) >= gl_m.num_subsectors)
 		return NULL;
 
-	gl_subsector* subsector = &gl_map->subsectors[id & 0x7fff];
-	gl_segment* segment = &gl_map->segments[subsector->first_seg];
-	linedef* linedef = &map->linedefs[segment->linedef];
+	gl_subsector* subsector = &gl_m.subsectors[id & 0x7fff];
+	gl_segment* segment = &gl_m.segments[subsector->first_seg];
+	linedef* linedef = &m.linedefs[segment->linedef];
 
 	sidedef* sidedef;
 	if (segment->side == 0)
-		sidedef = &map->sidedefs[linedef->front_sidedef];
+		sidedef = &m.sidedefs[linedef->front_sidedef];
 	else
-		sidedef = &map->sidedefs[linedef->back_sidedef];
+		sidedef = &m.sidedefs[linedef->back_sidedef];
 
-	return &map->sectors[sidedef->sector_index];
+	return &m.sectors[sidedef->sector_index];
 }
 
-void generate_meshes(const map* map, const gl_map* gl_map)
+void generate_meshes()
 {
-	generate_node(&root_draw_node, gl_map->num_nodes - 1, map, gl_map);
+	max_sector_height = 0.0f;
+	for (int i = 0; i < m.num_sectors; i++)
+	{
+		if (m.sectors[i].ceiling > max_sector_height)
+			max_sector_height = m.sectors[i].ceiling;
+	}
+	max_sector_height += 1.0f;
+
+	float width = m.max.x - m.min.x;
+	float height = m.max.y - m.min.y;
+	vec3 translate = { m.min.x, max_sector_height, m.max.y };
+
+	mat4 scale = mat4_scale((vec3) { width, height, 1.0f });
+	mat4 translation = mat4_translate(translate);
+	mat4 rotation = mat4_rotate((vec3) { 1.0f, 0.0f, 0.0f }, M_PI / 2.0f);
+	mat4 model = mat4_mult(scale, mat4_mult(rotation, translation));
+	insert_stencil_quad(model);
+
+	generate_node(&root_draw_node, gl_m.num_nodes - 1);
 }
 
-void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const gl_map* gl_map)
+void generate_node(draw_node** draw_node_ptr, size_t id)
 {
 	draw_node* d_node = malloc(sizeof(draw_node));
 	*d_node = (draw_node){ NULL, NULL, NULL };
@@ -280,7 +335,7 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 
 	if (id & 0x8000)
 	{
-		gl_subsector* subsector = &gl_map->subsectors[id & 0x7fff];
+		gl_subsector* subsector = &gl_m.subsectors[id & 0x7fff];
 
 		vertexarray vertices;
 		indexarray indices;
@@ -299,30 +354,30 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 
 		for (int j = 0; j < subsector->num_segs; j++)
 		{
-			gl_segment* segment = &gl_map->segments[j + subsector->first_seg];
+			gl_segment* segment = &gl_m.segments[j + subsector->first_seg];
 
 			vec2 start, end;
 			if (segment->start_vertex & VERT_IS_GL)
-				start = gl_map->vertices[segment->start_vertex & 0x7fff];
+				start = gl_m.vertices[segment->start_vertex & 0x7fff];
 			else
-				start = map->vertices[segment->start_vertex];
+				start = m.vertices[segment->start_vertex];
 
 			if (segment->end_vertex & VERT_IS_GL)
-				end = gl_map->vertices[segment->end_vertex & 0x7fff];
+				end = gl_m.vertices[segment->end_vertex & 0x7fff];
 			else
-				end = map->vertices[segment->end_vertex];
+				end = m.vertices[segment->end_vertex];
 
 			if (the_sector == NULL && segment->linedef != 0xffff)
 			{
-				linedef* linedef = &map->linedefs[segment->linedef];
+				linedef* linedef = &m.linedefs[segment->linedef];
 				int sector_index = -1;
 				if (linedef->flags & LINEDEF_FLAGS_TWO_SIDED && segment->side == 1)
-					sector_index = map->sidedefs[linedef->back_sidedef].sector_index;
+					sector_index = m.sidedefs[linedef->back_sidedef].sector_index;
 				else
-					sector_index = map->sidedefs[linedef->front_sidedef].sector_index;
+					sector_index = m.sidedefs[linedef->front_sidedef].sector_index;
 
 				if (sector_index >= 0)
-					the_sector = &map->sectors[sector_index];
+					the_sector = &m.sectors[sector_index];
 			}
 
 			floor_vertices[j] = ceil_vertices[j] = (vertex){
@@ -334,10 +389,10 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 			if (segment->linedef == 0xffff)
 				continue;
 
-			linedef* linedef = &map->linedefs[segment->linedef];
+			linedef* linedef = &m.linedefs[segment->linedef];
 
-			sidedef* front_sidedef = &map->sidedefs[linedef->front_sidedef];
-			sidedef* back_sidedef = &map->sidedefs[linedef->back_sidedef];
+			sidedef* front_sidedef = &m.sidedefs[linedef->front_sidedef];
+			sidedef* back_sidedef = &m.sidedefs[linedef->back_sidedef];
 
 			if (segment->side)
 			{
@@ -346,8 +401,8 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 				back_sidedef = tmp;
 			}
 
-			sector* front_sector = &map->sectors[front_sidedef->sector_index];
-			sector* back_sector = &map->sectors[back_sidedef->sector_index];
+			sector* front_sector = &m.sectors[front_sidedef->sector_index];
+			sector* back_sector = &m.sectors[back_sidedef->sector_index];
 
 			sidedef* sidedef = front_sidedef;
 			sector* sector = front_sector;
@@ -456,6 +511,17 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 					darray_push(indices, start_index + 1);
 					darray_push(indices, start_index + 2);
 					darray_push(indices, start_index + 3);
+
+					if (sector->ceiling_tex == sky_flat)
+					{
+						float quad_height = max_sector_height - p3.y;
+						mat4 scale = mat4_scale((vec3) { width, quad_height, 1.0f });
+						mat4 translation = mat4_translate(p3);
+						mat4 rotation = mat4_rotate((vec3) { 0.0f, 1.0f, 0.0f }, atan2f(y, x));
+						mat4 model = mat4_mult(scale, mat4_mult(rotation, translation));
+
+						insert_stencil_quad(model);
+					}
 				}
 			}
 			else
@@ -506,6 +572,17 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 				darray_push(indices, start_index + 1);
 				darray_push(indices, start_index + 2);
 				darray_push(indices, start_index + 3);
+
+				if (sector->ceiling_tex == sky_flat)
+				{
+					float quad_height = max_sector_height - p3.y;
+					mat4 scale = mat4_scale((vec3) { width, quad_height, 1.0f });
+					mat4 translation = mat4_translate(p3);
+					mat4 rotation = mat4_rotate((vec3) { 0.0f, 1.0f, 0.0f }, atan2f(y, x));
+					mat4 model = mat4_mult(scale, mat4_mult(rotation, translation));
+
+					insert_stencil_quad(model);
+				}
 			}
 		}
 
@@ -530,7 +607,8 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 		for (int i = 0; i < n_vertices; i++)
 			darray_push(vertices, ceil_vertices[i]);
 
-		// Triangulation will form (n - 2) triangles so 2 * 3 * (n - 3) indices are required
+		// Triangulation will form (n - 2) triangles so 2 * 3 * (n - 2) indices are required
+		uint32_t* stencil_indices = malloc(sizeof(uint32_t) * 3 * (n_vertices - 2));
 		for (int j = 0, k = 1; j < n_vertices - 2; j++, k++)
 		{
 			darray_push(indices, start_index + 0);
@@ -540,8 +618,25 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 			darray_push(indices, start_index + n_vertices);
 			darray_push(indices, start_index + n_vertices + k);
 			darray_push(indices, start_index + n_vertices + k + 1);
+
+			stencil_indices[3 * j + 0] = 0;
+			stencil_indices[3 * j + 1] = k;
+			stencil_indices[3 * j + 2] = k + 1;
 		}
 
+		if (the_sector->ceiling_tex == sky_flat)
+		{
+			vec3* stencil_vertices = malloc(sizeof(vec3) * n_vertices);
+			for (int i = 0; i < n_vertices; i++)
+				stencil_vertices[i] = ceil_vertices[i].position;
+
+			mesh* stencil_mesh = malloc(sizeof(mesh));
+			mesh_create(stencil_mesh, VERTEX_LAYOUT_PLAIN, n_vertices, stencil_vertices, 3 * (n_vertices - 2), stencil_indices);
+
+			free(stencil_vertices);
+		}
+
+		free(stencil_indices);
 		free(floor_vertices);
 		free(ceil_vertices);
 
@@ -552,8 +647,26 @@ void generate_node(draw_node** draw_node_ptr, size_t id, const map* map, const g
 	}
 	else
 	{
-		gl_node* node = &gl_map->nodes[id];
-		generate_node(&d_node->front, node->front_child_id, map, gl_map);
-		generate_node(&d_node->back, node->back_child_id, map, gl_map);
+		gl_node* node = &gl_m.nodes[id];
+		generate_node(&d_node->front, node->front_child_id);
+		generate_node(&d_node->back, node->back_child_id);
+	}
+}
+
+void insert_stencil_quad(mat4 transformation)
+{
+	if (stencil_list.head == NULL)
+	{
+		stencil_list.head = malloc(sizeof(stencil_node));
+		*stencil_list.head = (stencil_node){ transformation, NULL };
+
+		stencil_list.tail = stencil_list.head;
+	}
+	else
+	{
+		stencil_list.tail->next = malloc(sizeof(stencil_node));
+		*stencil_list.tail->next = (stencil_node){ transformation, NULL };
+
+		stencil_list.tail = stencil_list.tail->next;
 	}
 }
