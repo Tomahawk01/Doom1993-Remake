@@ -2,9 +2,9 @@
 #include "map.h"
 #include "gl_map.h"
 #include "palette.h"
-#include "flat_texture.h"
 #include "patch.h"
-#include "wall_texture.h"
+#include "texture/flat_texture.h"
+#include "texture/wall_texture.h"
 
 #include <stdint.h>
 
