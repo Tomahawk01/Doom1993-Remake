@@ -1,7 +1,6 @@
 #include "meshgen.h"
 #include "engine.h"
 #include "camera.h"
-#include "darray.h"
 #include "gl_map.h"
 #include "input.h"
 #include "map.h"
@@ -14,6 +13,7 @@
 #include "texture/wall_texture.h"
 #include "engine/state.h"
 #include "engine/utilities.h"
+#include "engine/anim.h"
 #include "math/matrix.h"
 #include "math/vector.h"
 
@@ -46,6 +46,15 @@ draw_node* root_draw_node;
 stencil_list stencil_ls;
 mesh quad_mesh;
 
+size_t num_tex_anim_defs;
+tex_anim_def tex_anim_defs[] = {
+	{"NUKAGE3", "NUKAGE1"},
+	{"FWATER4", "FWATER1"},
+	{"SWATER4", "SWATER1"},
+	{"LAVA4",	"LAVA1"},
+	{"BLOOD3",	"BLOOD1"},
+};
+
 static camera cam;
 static vec2 last_mouse;
 
@@ -73,8 +82,23 @@ void engine_init(wad* wad, const char* mapname)
 
 	sky_flat = wad_find_lump("F_SKY1", wad) - wad_find_lump("F_START", wad) - 1;
 
+	num_tex_anim_defs = sizeof tex_anim_defs / sizeof tex_anim_defs[0];
+	for (int i = 0; i < num_tex_anim_defs; i++)
+		tex_anim_defs[i].start = tex_anim_defs[i].end = -1;
+
 	flat_tex* flats = wad_read_flats(&num_flats, wad);
 	GLuint flat_texture_array = generate_flat_texture_array(flats, num_flats);
+	for (int i = 0; i < num_flats; i++)
+	{
+		for (int j = 0; j < num_tex_anim_defs; j++)
+		{
+			if (strcmp_nocase(flats[i].name, tex_anim_defs[j].start_name) == 0)
+				tex_anim_defs[j].start = i;
+
+			if (strcmp_nocase(flats[i].name, tex_anim_defs[j].end_name) == 0)
+				tex_anim_defs[j].end = i;
+		}
+	}
 	free(flats);
 
 	wall_tex* textures = wad_read_textures(&num_wall_textures, "TEXTURE1", wad);
@@ -143,7 +167,7 @@ void engine_init(wad* wad, const char* mapname)
 
 	uint32_t stencil_quad_indices[] = { 0, 2, 1, 0, 3, 2 };
 
-	mesh_create(&quad_mesh, VERTEX_LAYOUT_PLAIN, 4, stencil_quad_vertices, 6, stencil_quad_indices);
+	mesh_create(&quad_mesh, VERTEX_LAYOUT_PLAIN, 4, stencil_quad_vertices, 6, stencil_quad_indices, false);
 }
 
 static int palette_index = 0;
@@ -217,6 +241,8 @@ void engine_update(float dt)
 	{
 		is_first = true;
 	}
+
+	update_animation(dt);
 }
 
 void engine_render()

@@ -1,6 +1,7 @@
 #include "engine/meshgen.h"
 #include "engine/state.h"
 #include "engine/utilities.h"
+#include "engine/anim.h"
 #include "math/matrix.h"
 #include "math/vector.h"
 #include "darray.h"
@@ -10,6 +11,7 @@
 
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <stdbool.h>
 
 static void generate_node(draw_node** draw_node_ptr, size_t id);
 
@@ -45,6 +47,7 @@ void generate_node(draw_node** draw_node_ptr, size_t id)
 	if (id & 0x8000)
 	{
 		gl_subsector* subsector = &gl_m.subsectors[id & 0x7fff];
+		d_node->mesh = malloc(sizeof(mesh));
 
 		vertexarray vertices;
 		indexarray indices;
@@ -91,7 +94,7 @@ void generate_node(draw_node** draw_node_ptr, size_t id)
 
 			floor_vertices[j] = ceil_vertices[j] = (vertex){
 				.position = {start.x, 0.0f, start.y},
-				.tex_coords = {start.x / FLAT_TEXTURE_SIZE, start.y / FLAT_TEXTURE_SIZE},
+				.tex_coords = {start.x / FLAT_TEXTURE_SIZE, -start.y / FLAT_TEXTURE_SIZE},
 				.texture_type = 1
 			};
 
@@ -295,12 +298,10 @@ void generate_node(draw_node** draw_node_ptr, size_t id)
 			}
 		}
 
-		start_index = vertices.count;
+		int floor_tex = the_sector->floor_tex;
+		int ceil_tex = the_sector->ceiling_tex;
 		for (int i = 0; i < n_vertices; i++)
 		{
-			int floor_tex = the_sector->floor_tex;
-			int ceil_tex = the_sector->ceiling_tex;
-
 			floor_vertices[i].position.y = the_sector->floor;
 			floor_vertices[i].texture_index = floor_tex >= 0 && floor_tex < num_flats ? floor_tex : -1;
 
@@ -310,14 +311,23 @@ void generate_node(draw_node** draw_node_ptr, size_t id)
 			floor_vertices[i].light = ceil_vertices[i].light = the_sector->light_level / 256.0f;
 		}
 
+		start_index = vertices.count;
 		for (int i = 0; i < n_vertices; i++)
 			darray_push(vertices, floor_vertices[i]);
 
 		for (int i = 0; i < n_vertices; i++)
 			darray_push(vertices, ceil_vertices[i]);
 
+		for (int i = 0; i < num_tex_anim_defs; i++)
+		{
+			if (floor_tex >= tex_anim_defs[i].start && floor_tex <= tex_anim_defs[i].end)
+				add_tex_anim(d_node->mesh, start_index, start_index + n_vertices, tex_anim_defs[i].start, tex_anim_defs[i].end);
+
+			if (ceil_tex >= tex_anim_defs[i].start && ceil_tex <= tex_anim_defs[i].end)
+				add_tex_anim(d_node->mesh, start_index + n_vertices, start_index + 2 * n_vertices, tex_anim_defs[i].start, tex_anim_defs[i].end);
+		}
+
 		// Triangulation will form (n - 2) triangles so 2 * 3 * (n - 2) indices are required
-		uint32_t* stencil_indices = malloc(sizeof(uint32_t) * 3 * (n_vertices - 2));
 		for (int j = 0, k = 1; j < n_vertices - 2; j++, k++)
 		{
 			darray_push(indices, start_index + 0);
@@ -327,30 +337,12 @@ void generate_node(draw_node** draw_node_ptr, size_t id)
 			darray_push(indices, start_index + n_vertices);
 			darray_push(indices, start_index + n_vertices + k);
 			darray_push(indices, start_index + n_vertices + k + 1);
-
-			stencil_indices[3 * j + 0] = 0;
-			stencil_indices[3 * j + 1] = k;
-			stencil_indices[3 * j + 2] = k + 1;
 		}
 
-		if (the_sector->ceiling_tex == sky_flat)
-		{
-			vec3* stencil_vertices = malloc(sizeof(vec3) * n_vertices);
-			for (int i = 0; i < n_vertices; i++)
-				stencil_vertices[i] = ceil_vertices[i].position;
-
-			mesh* stencil_mesh = malloc(sizeof(mesh));
-			mesh_create(stencil_mesh, VERTEX_LAYOUT_PLAIN, n_vertices, stencil_vertices, 3 * (n_vertices - 2), stencil_indices);
-
-			free(stencil_vertices);
-		}
-
-		free(stencil_indices);
 		free(floor_vertices);
 		free(ceil_vertices);
 
-		d_node->mesh = malloc(sizeof(mesh));
-		mesh_create(d_node->mesh, VERTEX_LAYOUT_FULL, vertices.count, vertices.data, indices.count, indices.data);
+		mesh_create(d_node->mesh, VERTEX_LAYOUT_FULL, vertices.count, vertices.data, indices.count, indices.data, true);
 		darray_free(vertices);
 		darray_free(indices);
 	}

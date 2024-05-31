@@ -1,7 +1,7 @@
 #include "mesh.h"
 #include "math/vector.h"
 
-void mesh_create(mesh* mesh, vertex_layout vertex_layout, size_t num_vertices, const void* vertices, size_t num_indices, const uint32_t* indices)
+void mesh_create(mesh* mesh, vertex_layout vertex_layout, size_t num_vertices, const void* vertices, size_t num_indices, const uint32_t* indices, bool is_dynamic)
 {
 	mesh->num_indices = num_indices;
 
@@ -15,13 +15,13 @@ void mesh_create(mesh* mesh, vertex_layout vertex_layout, size_t num_vertices, c
 	switch (vertex_layout)
 	{
 	case VERTEX_LAYOUT_PLAIN:
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * num_vertices, vertices, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * num_vertices, vertices, is_dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)0);
 		glEnableVertexAttribArray(0);
 		break;
 	case VERTEX_LAYOUT_FULL:
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex) * num_vertices, vertices, GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertex) * num_vertices, vertices, is_dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (void*)offsetof(vertex, position));
 		glEnableVertexAttribArray(0);

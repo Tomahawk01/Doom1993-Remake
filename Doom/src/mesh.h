@@ -5,6 +5,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct mesh
 {
@@ -28,7 +29,7 @@ typedef enum vertex_layout
 	VERTEX_LAYOUT_FULL
 } vertex_layout;
 
-void mesh_create(mesh* mesh, vertex_layout vertex_layout, size_t num_vertices, const void* vertices, size_t num_indices, const uint32_t* indices);
+void mesh_create(mesh* mesh, vertex_layout vertex_layout, size_t num_vertices, const void* vertices, size_t num_indices, const uint32_t* indices, bool is_dynamic);
 
 typedef darray(vertex) vertexarray;
 typedef darray(uint32_t) indexarray;
